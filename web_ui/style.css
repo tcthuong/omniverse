@@ -1,0 +1,224 @@
+:root {
+  --bg-dark: #121212;
+  --panel-bg: rgba(25, 25, 25, 0.65);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --text-main: #FFFFFF;
+  --text-muted: #8E8E93;
+  --accent: #76b900; /* NVIDIA Green */
+  --accent-hover: #8ce100;
+  --track-bg: #333333;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, sans-serif;
+  user-select: none;
+}
+
+body, html {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+}
+
+/* Fullscreen Viewport */
+#webrtc-stream-container {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 1;
+}
+
+.stream-placeholder {
+  width: 100%;
+  height: 100%;
+  /* Gradient to simulate 3D depth */
+  background: radial-gradient(circle at 50% 50%, #2a2a2a 0%, #111111 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stream-text {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Floating UI Panel (Glassmorphism) */
+.floating-panel {
+  position: absolute;
+  top: 32px;
+  right: 32px; /* Positioned top-right like a typical HUD */
+  z-index: 10;
+  width: 360px;
+  border-radius: 16px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
+  padding: 24px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.control-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.icon-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--text-muted);
+  font-size: 10px;
+  font-style: italic;
+  font-family: serif;
+}
+
+/* Slider Customization */
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.slider-val-min, .slider-val-max {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 28px;
+}
+
+.custom-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: var(--track-bg);
+  border-radius: 3px;
+  outline: none;
+  position: relative;
+}
+
+/* Slider Track Color Fill Trick (Standard modern CSS) */
+.custom-slider::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  width: var(--val, 0%);
+  pointer-events: none;
+}
+
+.custom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  transition: transform 0.1s;
+  position: relative;
+  z-index: 2;
+}
+
+.custom-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.current-value {
+  text-align: right;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: -4px;
+}
+
+.current-value .unit {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+/* Divider */
+.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 24px 0;
+}
+
+/* Color Legend */
+.legend-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.legend-bar {
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+}
+
+.turbo-gradient {
+  /* Approximation of the Turbo colormap */
+  background: linear-gradient(90deg, 
+    #30123B 0%, 
+    #4662D7 20%, 
+    #36A9FC 40%, 
+    #1AE4B6 60%, 
+    #72FE5E 80%, 
+    #F6D03A 90%, 
+    #E84525 100%);
+}
+
+.legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}

@@ -1,0 +1,256 @@
+import json, time, shutil, re
+from pathlib import Path
+import numpy as np
+import torch
+from torch import nn
+import pyvista as pv
+from scipy.spatial import cKDTree
+import physicsnemo
+from physicsnemo.models.meshgraphnet import MeshGraphNet
+from torch_geometric.data import Data
+
+def read_omega(case_dir: Path) -> float:
+    """Pull rotation speed from constant/MRFProperties (authoritative) or folder name."""
+    mrf = case_dir / 'constant' / 'MRFProperties'
+    if mrf.exists():
+        m = re.search(r'omega\s+constant\s+([0-9.eE+-]+)', mrf.read_text())
+        if m: return float(m.group(1))
+    m = re.search(r'([0-9.]+)\s*RAD', case_dir.name, re.IGNORECASE)
+    if m: return float(m.group(1))
+    raise ValueError(f'cannot determine omega for {case_dir}')
+
+def extract(path: Path):
+    r = pv.POpenFOAMReader(str(path / 'case.foam'))
+    r.set_active_time_value(r.time_values[-1])
+    r.enable_all_cell_arrays(); r.cell_to_point_creation = False
+    m = r.read()['internalMesh']
+    cc = np.asarray(m.cell_centers().points, dtype=np.float32)
+    f = {k: np.asarray(m.cell_data[k], dtype=np.float32) for k in ['U','p','k','nut','omega']}
+    f['omega_turb'] = f.pop('omega')
+    return cc, f
+
+def main():
+    print('torch', torch.__version__, '  cuda', torch.cuda.is_available(),
+          '  gpu', torch.cuda.get_device_name() if torch.cuda.is_available() else '-')
+    print('physicsnemo', physicsnemo.__version__)
+
+    # Local paths
+    INPUT = Path('input')
+    if not INPUT.is_dir():
+        INPUT = Path('D:/Work/input')
+    print('INPUT =', INPUT.resolve())
+    
+    OUT = Path('out')
+    OUT.mkdir(exist_ok=True)
+
+    # 1 - Discover + extract every case in input/
+    case_dirs = sorted([p for p in INPUT.iterdir() if p.is_dir() and (p / 'case.foam').exists()])
+    assert case_dirs, f'no case folders found in {INPUT}'
+    print(f'Found {len(case_dirs)} case(s):')
+
+    cc = None; cases = {}
+    for cd in case_dirs:
+        om = read_omega(cd)
+        t0 = time.time()
+        ccx, fields = extract(cd)
+        if cc is None: cc = ccx
+        cases[om] = fields
+        umax = float(np.linalg.norm(fields['U'], axis=1).max())
+        print(f'  {cd.name}  omega={om}  |U|max={umax:.2f}  cells={ccx.shape[0]:,}  t={time.time()-t0:.1f}s')
+
+    OMEGAS = sorted(cases.keys())
+    print(f'Omegas: {OMEGAS}')
+
+    # 2 - Train / val split (middle omega = validation, rest = training)
+    if len(OMEGAS) < 3:
+        raise ValueError('need at least 3 cases for interpolation-style LOO split')
+    VAL_OM = [OMEGAS[len(OMEGAS)//2]]
+    TRAIN_OM = [om for om in OMEGAS if om not in VAL_OM]
+    INFER_OM = np.linspace(min(OMEGAS), max(OMEGAS), 21).tolist()
+    print(f'train: {TRAIN_OM}')
+    print(f'val  : {VAL_OM}')
+    print(f'infer: {INFER_OM[0]:.0f} -> {INFER_OM[-1]:.0f} ({len(INFER_OM)} frames)')
+
+    # 3 - Importance-weighted subsample + KNN graph
+    print("\n--- Subsampling & KNN ---")
+    SUBSAMPLE = 300_000
+    K_NEIGHBORS = 8
+
+    mag = np.zeros(cc.shape[0], np.float32)
+    for om in TRAIN_OM:
+        mag = np.maximum(mag, np.linalg.norm(cases[om]['U'], axis=1) / om)
+    w = 0.3/len(mag) + 0.7*mag/mag.sum()
+    w = w/w.sum()
+    rng = np.random.default_rng(0)
+    N = cc.shape[0]
+    sub_idx = np.sort(rng.choice(N, size=min(SUBSAMPLE, N), replace=False, p=w))
+    cc_s = cc[sub_idx]
+    cases_s = {om: {k: v[sub_idx] for k, v in f.items()} for om, f in cases.items()}
+    print(f'Subsampled {len(sub_idx):,} / {N:,}')
+
+    t0 = time.time()
+    tree = cKDTree(cc_s)
+    _, nbrs = tree.query(cc_s, k=K_NEIGHBORS+1)
+    src = np.repeat(np.arange(len(cc_s)), K_NEIGHBORS)
+    dst = nbrs[:, 1:].reshape(-1)
+    rel = cc_s[dst] - cc_s[src]
+    dist = np.linalg.norm(rel, axis=1, keepdims=True)
+    edge_feat = np.concatenate([rel, dist], axis=1).astype(np.float32)
+    edge_index_np = np.stack([src, dst], axis=0).astype(np.int64)
+    print(f'KNN graph: {len(src):,} edges  ({time.time()-t0:.1f}s)')
+
+    # 4 - Physics-informed normalization
+    print("\n--- Normalization ---")
+    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    b_min, b_max = cc_s.min(0), cc_s.max(0)
+    b_cen, b_half = 0.5*(b_min+b_max), 0.5*(b_max-b_min)
+    om_max = float(max(OMEGAS))
+
+    us, ps, ks, nus, lom = [], [], [], [], []
+    for om in TRAIN_OM:
+        c = cases_s[om]
+        us.append(c['U']/om); ps.append(c['p']/om**2); ks.append(c['k']/om**2)
+        nus.append(c['nut']); lom.append(np.log(c['omega_turb']+1e-6))
+    U_cat = np.concatenate(us); p_cat = np.concatenate(ps); k_cat = np.concatenate(ks)
+    nu_cat = np.concatenate(nus); lom_cat = np.concatenate(lom)
+
+    stats = {
+        'coord_center': b_cen.tolist(), 'coord_half': b_half.tolist(), 'omega_max': om_max,
+        'U_mean': U_cat.mean(0).tolist(), 'U_std': U_cat.std(0).tolist(),
+        'p_mean': float(p_cat.mean()), 'p_std': float(p_cat.std()),
+        'k_mean': float(k_cat.mean()), 'k_std': float(k_cat.std()),
+        'nut_mean': float(nu_cat.mean()), 'nut_std': float(nu_cat.std()),
+        'logom_mean': float(lom_cat.mean()), 'logom_std': float(lom_cat.std()),
+        'edge_mean': edge_feat.mean(0).tolist(), 'edge_std': (edge_feat.std(0)+1e-8).tolist(),
+    }
+    (OUT/'norm_stats.json').write_text(json.dumps(stats, indent=2))
+    del us, ps, ks, nus, lom, U_cat, p_cat, k_cat, nu_cat, lom_cat
+    
+    def node_feat(cc_s, om, s):
+        xyz = (cc_s - np.asarray(s['coord_center'],np.float32)) / np.asarray(s['coord_half'],np.float32)
+        o = np.full((cc_s.shape[0],1), om/s['omega_max'], np.float32)
+        return np.concatenate([xyz.astype(np.float32), o], axis=1)
+
+    def targets(f, om, s):
+        U = (f['U']/om - np.asarray(s['U_mean'])) / np.asarray(s['U_std'])
+        p = (f['p']/om**2 - s['p_mean']) / s['p_std']
+        k = (f['k']/om**2 - s['k_mean']) / s['k_std']
+        nu = (f['nut'] - s['nut_mean']) / s['nut_std']
+        lom = (np.log(f['omega_turb']+1e-6) - s['logom_mean']) / s['logom_std']
+        return np.stack([U[:,0],U[:,1],U[:,2],p,k,nu,lom], axis=1).astype(np.float32)
+
+    def denorm(y, om, s):
+        U = (y[:,:3]*np.asarray(s['U_std']) + np.asarray(s['U_mean'])) * om
+        return {
+            'U': U,
+            'p': (y[:,3]*s['p_std'] + s['p_mean']) * om**2,
+            'k': (y[:,4]*s['k_std'] + s['k_mean']) * om**2,
+            'nut': y[:,5]*s['nut_std'] + s['nut_mean'],
+            'omega_turb': np.exp(y[:,6]*s['logom_std'] + s['logom_mean']) - 1e-6,
+        }
+
+    e_mean = np.asarray(stats['edge_mean'], np.float32)
+    e_std = np.asarray(stats['edge_std'], np.float32)
+    edge_n = ((edge_feat - e_mean) / e_std).astype(np.float32)
+    edge_tensor = torch.from_numpy(edge_n).to(DEVICE)
+
+    # PhysicsNeMo MGN expects a PyG Data object (with edge_index), not a raw tensor.
+    graph = Data(edge_index=torch.from_numpy(edge_index_np).to(DEVICE),
+                 num_nodes=len(cc_s)).to(DEVICE)
+    print('graph:', graph)
+
+    # 5 - PhysicsNeMo MeshGraphNet
+    print("\n--- Initialize Model ---")
+    model = MeshGraphNet(
+        input_dim_nodes=4,
+        input_dim_edges=4,
+        output_dim=7,
+        processor_size=8,
+        hidden_dim_node_encoder=64,
+        hidden_dim_edge_encoder=64,
+        hidden_dim_processor=64,
+        hidden_dim_node_decoder=64,
+        mlp_activation_fn='silu',
+        num_processor_checkpoint_segments=4, 
+        recompute_activation=False,
+    ).to(DEVICE)
+    print(f'params: {sum(p.numel() for p in model.parameters())/1e6:.2f}M')
+
+    # 6 - Train
+    print("\n--- Training ---")
+    EPOCHS = 3000
+    SAVE_EVERY = 20
+    LR, LR_MIN = 1e-3, 1e-5
+
+    X_tr = {om: torch.from_numpy(node_feat(cc_s, om, stats)).to(DEVICE) for om in TRAIN_OM}
+    y_tr = {om: torch.from_numpy(targets(cases_s[om], om, stats)).to(DEVICE) for om in TRAIN_OM}
+    X_va = torch.from_numpy(node_feat(cc_s, VAL_OM[0], stats)).to(DEVICE)
+    y_va = torch.from_numpy(targets(cases_s[VAL_OM[0]], VAL_OM[0], stats)).to(DEVICE)
+
+    opt = torch.optim.Adam(model.parameters(), lr=LR)
+    sch = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EPOCHS, eta_min=LR_MIN)
+
+    def save_ckpt(tag='checkpoint'):
+        torch.save(model.state_dict(), OUT / f'{tag}.pt')
+        (OUT/'training_log.json').write_text(json.dumps(log, indent=2))
+
+    log = []; t0 = time.time()
+    best_val = float('inf')
+    try:
+        for ep in range(EPOCHS):
+            model.train()
+            om = TRAIN_OM[ep % len(TRAIN_OM)]
+            pred = model(X_tr[om], edge_tensor, graph)
+            loss = ((pred - y_tr[om])**2).mean()
+            opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sch.step()
+            tl = loss.item()
+
+            model.eval()
+            with torch.no_grad():
+                vp = model(X_va, edge_tensor, graph)
+                vlm = ((vp - y_va)**2).mean().item()
+            log.append({'epoch': ep, 'train': tl, 'val': vlm,
+                        'lr': sch.get_last_lr()[0], 't': time.time()-t0})
+            if ep % 10 == 0 or ep == EPOCHS-1:
+                print(f'ep {ep:3d}  train={tl:.4e}  val={vlm:.4e}  t={time.time()-t0:.0f}s')
+            if vlm < best_val:
+                best_val = vlm
+                save_ckpt('checkpoint_best')
+            if ep % SAVE_EVERY == 0 or ep == EPOCHS-1:
+                save_ckpt('checkpoint')
+    except KeyboardInterrupt:
+        print("Training stopped manually.")
+    finally:
+        save_ckpt('checkpoint')
+        print(f'final save. best val loss = {best_val:.4e}')
+        print('files in OUT:')
+        for f in sorted(OUT.iterdir()):
+            try:
+                print(f'  {f.name}  ({f.stat().st_size/1e6:.2f} MB)')
+            except Exception:
+                pass
+
+    # 7 - Inference sweep + download equivalent
+    print("\n--- Inference ---")
+    model.eval(); frames = {}
+    with torch.no_grad():
+        for om in INFER_OM:
+            X = torch.from_numpy(node_feat(cc_s, om, stats)).to(DEVICE)
+            y = model(X, edge_tensor, graph).cpu().numpy()
+            frames[f'{om:.1f}'] = denorm(y, om, stats)
+
+    packed = {}
+    for k, d in frames.items():
+        for f, a in d.items(): packed[f'{k}/{f}'] = a.astype(np.float32)
+    np.savez_compressed(OUT/'predictions.npz', **packed)
+    np.save(OUT/'cell_centers.npy', cc_s)
+    np.save(OUT/'sub_idx.npy', sub_idx)
+    print(f'{len(frames)} frames; predictions.npz = {(OUT/"predictions.npz").stat().st_size/1e6:.1f} MB')
+
+    zp = Path('out_outputs.zip')
+    shutil.make_archive(str(zp.with_suffix('')), 'zip', str(OUT))
+    print(f'Saved all output files to {zp}  ({zp.stat().st_size/1e6:.1f} MB)')
+    print("Done! You can now use the outputs locally.")
+if __name__ == '__main__':
+    main()

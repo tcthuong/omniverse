@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Omniverse Kit WebRTC Streaming</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                margin: 0;
+                padding: 0;
+                background: #ffffff;
+                min-height: 100vh;
+                color: #1f2328;
+            }
+
+            .container {
+                max-width: 100vw;
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+                min-height: 100vh;
+            }
+
+            h1 {
+                font-size: 2.5em;
+                margin: 8px 0 16px 0;
+                text-align: center;
+                color: #0969da;
+                font-weight: 600;
+            }
+
+            .control-panel {
+                background: #f6f8fa;
+                border: 1px solid #d0d7de;
+                border-radius: 6px;
+                padding: 16px;
+                margin: 0 16px 4px 16px;
+                flex-shrink: 0;
+            }
+
+            .controls {
+                display: flex;
+                gap: 8px;
+                justify-content: center;
+                align-items: center;
+                flex-wrap: wrap;
+                margin-bottom: 12px;
+            }
+
+            .controls:last-child {
+                margin-bottom: 0;
+            }
+
+            .control {
+                padding: 8px 16px;
+                border: 1px solid #d0d7de;
+                border-radius: 6px;
+                background: #ffffff;
+                color: #1f2328;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                font-size: 14px;
+            }
+
+            .control:hover:not(:disabled) {
+                background: #f3f4f6;
+                border-color: #0969da;
+            }
+
+            .control:disabled {
+                background: #f6f8fa;
+                color: #8c959f;
+                cursor: not-allowed;
+                border-color: #d0d7de;
+            }
+
+            button.control {
+                font-weight: 600;
+            }
+
+            button.control:hover:not(:disabled) {
+                background: #2ea043;
+                border-color: #2ea043;
+                color: white;
+            }
+
+            input.control, select.control {
+                background: #ffffff;
+                border: 1px solid #d0d7de;
+                color: #1f2328;
+                min-width: 180px;
+            }
+
+            input.control:focus, select.control:focus {
+                border-color: #0969da;
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.3);
+            }
+
+            .stream-content {
+                background: #ffffff;
+                margin: 0 16px 16px 16px;
+                position: relative;
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 70vh;
+            }
+
+            #remote-video {
+                width: 100%;
+                max-width: 100%;
+                height: auto;
+                max-height: 80vh;
+            }
+
+            #loading-info {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 1.2em;
+                font-weight: 500;
+                color: #656d76;
+                pointer-events: none;
+                text-align: center;
+                padding: 20px;
+            }
+
+            .status {
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .status.ready {
+                background: #2ea043;
+                color: white;
+            }
+
+            .status.connecting {
+                background: #fb8500;
+                color: white;
+            }
+
+            .status.error {
+                background: #cf222e;
+                color: white;
+            }
+
+            /* Responsive design */
+            @media (max-width: 768px) {
+                .control-panel {
+                    margin: 0 8px 4px 8px;
+                    padding: 12px;
+                }
+
+                .stream-content {
+                    margin: 0 8px 8px 8px;
+                    min-height: 60vh;
+                }
+
+                .controls {
+                    flex-direction: column;
+                    align-items: stretch;
+                }
+
+                .control {
+                    margin: 2px 0;
+                    min-width: auto;
+                }
+
+                .controls span {
+                    margin: 8px 0 4px 0 !important;
+                    text-align: center;
+                }
+
+                h1 {
+                    font-size: 2em;
+                    margin: 8px 0 12px 0;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🎬 Omniverse Kit WebRTC Streaming</h1>
+
+            <div class="control-panel">
+                <div class="controls">
+                    <input type="text" id="server-url" class="control" placeholder="Server IP (auto-detected)" title="Server IP address - automatically detected from current page URL" />
+                    <select id="stream-select" class="control" title="Select which stream to connect to">
+                        <option value="">Loading streams...</option>
+                    </select>
+                    <select id="resolution" class="control">
+                        <option value="1024x768">1024x768</option>
+                        <option value="1920x1080" selected>1920x1080</option>
+                        <option value="2560x1440">2560x1440</option>
+                        <option value="3840x2160">3840x2160</option>
+                    </select>
+                </div>
+                <div class="controls">
+                    <button id="connect-button" class="control">🔗 CONNECT</button>
+                    <button id="disconnect-button" class="control">❌ DISCONNECT</button>
+                    <button id="pause-button" class="control">⏸️ PAUSE</button>
+                    <button id="resume-button" class="control">▶️ RESUME</button>
+                    <span style="font-weight: 600; margin-left: 16px; margin-right: 8px; align-self: center;">Status:</span>
+                    <span id="connection-status" class="status ready" style="align-self: center;">Ready to Connect</span>
+                </div>
+            </div>
+
+            <div class="stream-content">
+                <video id="remote-video" autoplay muted playsinline poster="/static/placeholder.jpg"></video>
+                <audio id="remote-audio" autoplay muted></audio>
+                <div id="loading-info">Click Connect to Begin Streaming</div>
+            </div>
+        </div>
+
+        <!-- Import the web-streaming-library -->
+        <script type="module">
+            import { AppStreamer, StreamType } from '/static/omniverse-webrtc-streaming-library.js';
+
+            // Initialize the streaming interface
+            document.addEventListener('DOMContentLoaded', function() {
+                const connectButton = document.getElementById('connect-button');
+                const disconnectButton = document.getElementById('disconnect-button');
+                const pauseButton = document.getElementById('pause-button');
+                const resumeButton = document.getElementById('resume-button');
+                const serverUrlInput = document.getElementById('server-url');
+                const streamSelect = document.getElementById('stream-select');
+                const resolutionSelect = document.getElementById('resolution');
+                const statusSpan = document.getElementById('connection-status');
+                const loadingInfo = document.getElementById('loading-info');
+                const remoteVideo = document.getElementById('remote-video');
+                const remoteAudio = document.getElementById('remote-audio');
+
+                // Stream state
+                let isConnected = false;
+                let isPaused = false;
+                let currentController = null;
+                let streamConfigurations = null;
+
+                // Stream status enum
+                const StreamStatus = {
+                    NONE: 'NONE',
+                    CONNECTING: 'CONNECTING',
+                    CONNECTED: 'CONNECTED',
+                    DISCONNECTED: 'DISCONNECTED',
+                    ERROR: 'ERROR',
+                    PAUSED: 'PAUSED'
+                };
+
+                // Resolution options
+                const StreamResolution = {
+                    '1024x768': {width: 1024, height: 768},
+                    '1920x1080': {width: 1920, height: 1080},
+                    '2560x1440': {width: 2560, height: 1440},
+                    '3840x2160': {width: 3840, height: 2160}
+                };
+
+                // Fetch stream configurations from the server
+                async function fetchStreamConfigurations() {
+                    try {
+                        const response = await fetch('/api/stream-config');
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        streamConfigurations = await response.json();
+                        console.log('Fetched stream configurations:', streamConfigurations);
+                        populateStreamDropdown();
+                        return streamConfigurations;
+                    } catch (error) {
+                        console.error('Failed to fetch stream configurations:', error);
+                        // Fallback to default configuration using library default signaling port
+                        streamConfigurations = {
+                            streams: [{
+                                name: "Default Stream",
+                                type: "primary",
+                                port: 49100,
+                                streamType: "webrtc",
+                                description: "Default WebRTC stream (fallback)"
+                            }]
+                        };
+                        populateStreamDropdown();
+                        return streamConfigurations;
+                    }
+                }
+
+                // Populate the stream selection dropdown
+                function populateStreamDropdown() {
+                    if (!streamConfigurations) return;
+
+                    streamSelect.innerHTML = '';
+
+                    if (streamConfigurations.streams.length === 0) {
+                        // No streams configured - show message
+                        const option = document.createElement('option');
+                        option.value = '';
+                        option.textContent = 'No streams configured';
+                        option.disabled = true;
+                        streamSelect.appendChild(option);
+                        connectButton.disabled = true;
+                        return;
+                    }
+
+                    streamConfigurations.streams.forEach((stream, index) => {
+                        const option = document.createElement('option');
+                        option.value = index;
+                        option.textContent = `${stream.name} (Port ${stream.port})`;
+                        option.title = `${stream.description}\nType: ${stream.streamType || 'unknown'}`;
+                        streamSelect.appendChild(option);
+                    });
+
+                    // Select the first stream by default
+                    if (streamConfigurations.streams.length > 0) {
+                        streamSelect.value = '0';
+                        connectButton.disabled = false;
+                    }
+                }
+
+                // Get the currently selected stream configuration
+                function getSelectedStream() {
+                    const selectedIndex = parseInt(streamSelect.value);
+                    if (isNaN(selectedIndex) || !streamConfigurations || selectedIndex >= streamConfigurations.streams.length) {
+                        return null;
+                    }
+                    return streamConfigurations.streams[selectedIndex];
+                }
+
+                // Controller class to handle stream callbacks
+                class StreamController {
+                    constructor() {
+                        // Simple unique ID without crypto APIs - works on HTTP and all browsers
+                        this.id = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                        this.onUpdate = this.onUpdate.bind(this);
+                        this.onStart = this.onStart.bind(this);
+                        this.onStop = this.onStop.bind(this);
+                        this.onStreamStats = this.onStreamStats.bind(this);
+                    }
+
+                    setLoadingInfo(message) {
+                        if (message) {
+                            loadingInfo.style.display = 'initial';
+                            loadingInfo.textContent = message;
+                        } else {
+                            loadingInfo.style.display = 'none';
+                        }
+                    }
+
+                    onStart(message) {
+                        console.log('Stream start event:', message);
+                        if (message.action === 'start') {
+                            if (message.status === 'success') {
+                                console.log('Stream Ready');
+                                setStreamStatus(StreamStatus.CONNECTED);
+                                this.setLoadingInfo('');
+                                isConnected = true;
+                            } else if (message.status === 'warning') {
+                                console.warn('Stream warning:', message.info);
+                            } else if (message.status === 'error') {
+                                console.error('Stream start error:', message.info);
+                                setStreamStatus(StreamStatus.ERROR);
+                                this.setLoadingInfo('Failed to connect');
+                                isConnected = false;
+                            }
+                        }
+                    }
+
+                    onStop(message) {
+                        console.log('Stream stop event:', message);
+                        if (message.action === 'terminate' && message.status === 'error') {
+                            console.error('Stream terminated with error:', message.info);
+                            setStreamStatus(StreamStatus.ERROR);
+                            this.setLoadingInfo('Disconnected unexpectedly');
+                            isConnected = false;
+                        } else if (message.action === 'terminate' && message.status === 'success') {
+                            setStreamStatus(StreamStatus.NONE);
+                            this.setLoadingInfo('Disconnected');
+                            isConnected = false;
+                        }
+                    }
+
+                    onUpdate(message) {
+                        console.log('Stream update event:', message);
+                        if (message.action === 'authUser' && message.status === 'success') {
+                            console.log('User Authenticated');
+                        }
+                    }
+
+                    onStreamStats(message) {
+                        console.log('Stream stats:', message);
+                    }
+                }
+
+                // Update status display
+                function updateStatus(status, message) {
+                    statusSpan.textContent = message;
+                    statusSpan.className = 'status ' + status;
+                }
+
+                // Set stream status and update UI
+                function setStreamStatus(status) {
+                    connectButton.disabled = status !== StreamStatus.NONE && status !== StreamStatus.ERROR;
+                    disconnectButton.disabled = status !== StreamStatus.CONNECTED && status !== StreamStatus.PAUSED;
+                    pauseButton.disabled = status !== StreamStatus.CONNECTED;
+                    resumeButton.disabled = status !== StreamStatus.PAUSED;
+                    streamSelect.disabled = status === StreamStatus.CONNECTING || status === StreamStatus.CONNECTED;
+
+                    // Handle resolution dropdown based on connection status and allowDynamicResize setting
+                    if (status === StreamStatus.CONNECTED || status === StreamStatus.CONNECTING || status === StreamStatus.PAUSED) {
+                        // Only when actually connected, check the allowDynamicResize setting
+                        const selectedStream = getSelectedStream();
+                        if (selectedStream && selectedStream.allowDynamicResize !== undefined) {
+                            resolutionSelect.disabled = !selectedStream.allowDynamicResize;
+                        } else {
+                            // Default to disabled if setting is not available
+                            resolutionSelect.disabled = true;
+                        }
+                    } else {
+                        // Always enabled when not connected/connecting (NONE, ERROR, DISCONNECTED)
+                        resolutionSelect.disabled = false;
+                    }
+
+                    switch (status) {
+                        case StreamStatus.NONE:
+                            updateStatus('ready', 'Ready to Connect');
+                            break;
+                        case StreamStatus.CONNECTING:
+                            updateStatus('connecting', 'Connecting...');
+                            break;
+                        case StreamStatus.CONNECTED:
+                            updateStatus('ready', 'Connected');
+                            break;
+                        case StreamStatus.PAUSED:
+                            updateStatus('ready', 'Paused');
+                            break;
+                        case StreamStatus.ERROR:
+                            updateStatus('error', 'Connection Error');
+                            break;
+                        case StreamStatus.DISCONNECTED:
+                            updateStatus('ready', 'Disconnected');
+                            break;
+                    }
+                }
+
+                // Get current resolution
+                function getCurrentResolution() {
+                    const resolution = StreamResolution[resolutionSelect.value] || StreamResolution['1920x1080'];
+                    return resolution;
+                }
+
+                // Connect to the stream
+                async function connect() {
+                    if (isConnected) {
+                        console.log('Already connected');
+                        return;
+                    }
+
+                    try {
+                        setStreamStatus(StreamStatus.CONNECTING);
+
+                        const serverUrl = serverUrlInput.value.trim() || autoDetectServerIP();
+                        const selectedStream = getSelectedStream();
+                        const resolution = getCurrentResolution();
+
+                        if (!selectedStream) {
+                            throw new Error('No stream selected or available');
+                        }
+
+                        if (!streamConfigurations || streamConfigurations.streams.length === 0) {
+                            throw new Error('No streams configured - please check your Kit livestream settings');
+                        }
+
+                        console.log(`Connecting to ${selectedStream.name} at ${serverUrl} with signaling port ${selectedStream.port} and resolution ${resolution.width}x${resolution.height}`);
+                        console.log(`Stream details:`, selectedStream);
+
+                        // Show which IP is being used
+                        if (serverUrl === autoDetectServerIP() && serverUrl !== '127.0.0.1') {
+                            console.log(`Using auto-detected server IP: ${serverUrl}`);
+                        }
+
+                        // Create new controller for this connection
+                        currentController = new StreamController();
+                        currentController.setLoadingInfo('Connecting...');
+
+                        // Configure stream parameters
+                        const streamParams = {
+                            streamSource: StreamType.DIRECT,
+                            logLevel: 2, // WARN level
+                            streamConfig: {
+                                videoElementId: 'remote-video',
+                                audioElementId: 'remote-audio',
+                                server: serverUrl,
+                                signalingPort: selectedStream.port,
+                                width: resolution.width,
+                                height: resolution.height,
+                                fps: 60,
+                                maxReconnects: 3,
+                                onUpdate: currentController.onUpdate,
+                                onStart: currentController.onStart,
+                                onStop: currentController.onStop,
+                                onStreamStats: currentController.onStreamStats
+                            }
+                        };
+
+                        console.log('Final stream configuration being sent to AppStreamer:', streamParams);
+
+                        // Start the connection
+                        const result = await AppStreamer.connect(streamParams);
+                        console.log('Connection request made:', result);
+
+                        if (result.status === 'inProgress') {
+                            currentController.setLoadingInfo('Connecting to stream...');
+                        }
+
+                    } catch (error) {
+                        console.error('Connection failed:', error);
+                        setStreamStatus(StreamStatus.ERROR);
+                        if (currentController) {
+                            currentController.setLoadingInfo('Connection failed');
+                        }
+                        currentController = null;
+                    }
+                }
+
+                // Disconnect from the stream
+                async function disconnect() {
+                    if (!isConnected && !isPaused) {
+                        console.log('Not connected');
+                        return;
+                    }
+
+                    try {
+                        console.log('Disconnecting...');
+                        if (currentController) {
+                            currentController.setLoadingInfo('Disconnecting...');
+                        }
+
+                        const result = await AppStreamer.terminate();
+                        console.log('Disconnect request made:', result);
+
+                        setStreamStatus(StreamStatus.NONE);
+                        if (currentController) {
+                            currentController.setLoadingInfo('Click Connect to Begin Streaming');
+                        }
+                        currentController = null;
+
+                        isConnected = false;
+                        isPaused = false;
+
+                    } catch (error) {
+                        console.error('Disconnect failed:', error);
+                        setStreamStatus(StreamStatus.ERROR);
+                        if (currentController) {
+                            currentController.setLoadingInfo('Failed to disconnect');
+                        }
+                        currentController = null;
+                    }
+                }
+
+                // Pause the stream
+                async function pauseStream() {
+                    if (!isConnected || isPaused) {
+                        return;
+                    }
+
+                    try {
+                        console.log('Pausing stream...');
+                        if (currentController) {
+                            currentController.setLoadingInfo('Pausing...');
+                        }
+
+                        const result = await AppStreamer.stop();
+                        console.log('Pause request made:', result);
+
+                        setStreamStatus(StreamStatus.PAUSED);
+                        if (currentController) {
+                            currentController.setLoadingInfo('Paused');
+                        }
+
+                        isPaused = true;
+
+                    } catch (error) {
+                        console.error('Pause failed:', error);
+                        setStreamStatus(StreamStatus.ERROR);
+                        if (currentController) {
+                            currentController.setLoadingInfo('Failed to pause');
+                        }
+                    }
+                }
+
+                // Resume the stream
+                async function resumeStream() {
+                    if (!isPaused) {
+                        return;
+                    }
+
+                    try {
+                        console.log('Resuming stream...');
+                        if (currentController) {
+                            currentController.setLoadingInfo('Resuming...');
+                        }
+
+                        await AppStreamer.start();
+                        console.log('Resume request made');
+
+                        setStreamStatus(StreamStatus.CONNECTED);
+                        isPaused = false;
+
+                    } catch (error) {
+                        console.error('Resume failed:', error);
+                        setStreamStatus(StreamStatus.ERROR);
+                        if (currentController) {
+                            currentController.setLoadingInfo('Failed to resume');
+                        }
+                    }
+                }
+
+                // Handle resolution changes
+                function onResolutionChange() {
+                    if (isConnected) {
+                        const resolution = getCurrentResolution();
+                        console.log(`Changing resolution to ${resolution.width}x${resolution.height}`);
+                        AppStreamer.resize(resolution.width, resolution.height);
+                    }
+                }
+
+                // Auto-detect server IP from current page URL
+                function autoDetectServerIP() {
+                    // Get the hostname from the current page URL
+                    const hostname = window.location.hostname;
+
+                    // If hostname is empty or localhost variants, fallback to 127.0.0.1
+                    if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') {
+                        return '127.0.0.1';
+                    }
+
+                    return hostname;
+                }
+
+                // Initialize UI
+                setStreamStatus(StreamStatus.NONE);
+                resolutionSelect.value = '1920x1080';
+
+                // Auto-populate server URL with detected IP
+                const detectedIP = autoDetectServerIP();
+                serverUrlInput.value = detectedIP;
+                serverUrlInput.placeholder = detectedIP;
+
+                console.log(`Auto-detected server IP: ${detectedIP}`);
+
+                // Fetch and populate stream configurations
+                fetchStreamConfigurations().then(() => {
+                    console.log('Stream configurations loaded');
+                }).catch(error => {
+                    console.error('Failed to load stream configurations:', error);
+                });
+
+                // Event listeners
+                connectButton.addEventListener('click', connect);
+                disconnectButton.addEventListener('click', disconnect);
+                pauseButton.addEventListener('click', pauseStream);
+                resumeButton.addEventListener('click', resumeStream);
+                resolutionSelect.addEventListener('change', onResolutionChange);
+
+                // Handle page unload
+                window.addEventListener('beforeunload', () => {
+                    if (isConnected) {
+                        AppStreamer.terminate();
+                    }
+                });
+
+                console.log('WebRTC streaming client initialized with web-streaming-library');
+            });
+        </script>
+    </body>
+</html>
