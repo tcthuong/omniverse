@@ -1,0 +1,71 @@
+FoamFile {
+    version 2.0;
+    format ascii;
+    class dictionary;
+    object controlDict;
+}
+application simscaleSimpleFoam;
+startFrom startTime;
+stopAt endTime;
+purgeWrite 0;
+writeFormat ascii;
+writePrecision 12;
+writeCompression on;
+timeFormat general;
+timePrecision 16;
+runTimeModifiable yes;
+deltaT 1.0;
+startTime 0;
+endTime 1000.0;
+adjustTimeStep no;
+writeControl timeStep;
+writeInterval 1000;
+libs ("libchtgfm.so" "libsimScaleFunctionObjects.so");
+functions {
+    UBlendingFactor {
+        type stabilityBlendingFactor;
+        libs (fieldFunctionObjects);
+        field U;
+        result UBlendingFactor;
+        switchNonOrtho yes;
+        maxNonOrthogonality 80;
+        minNonOrthogonality 85;
+        switchSkewness yes;
+        maxSkewness 4;
+        minSkewness 6;
+        switchGradCc no;
+        switchResiduals no;
+        switchCo no;
+        switchFaceWeight no;
+    }
+    sigHandler {
+        type openFoamWriteOldTimesOnSignal;
+        sleepSecondsBeforeReraising 60;
+        numberOfTimestepsToStore 1;
+        writeCurrent false;
+        sigFPE true;
+        sigSEGV false;
+        sigABRT true;
+        sigINT false;
+        sigQUIT true;
+    }
+    flexibleWriter {
+        type flexibleWriter;
+        clockTimeLimit 1000000.0;
+        fracTime -1.0;
+    }
+    divergenceHandler {
+        type divergenceHandler;
+        nItersToSkip 50;
+        U 10000000.0;
+        p -1000000000000000.0 1000000000000000.0;
+        scalarFields (p);
+        vectorFields (U);
+        active yes;
+    }
+    ConvergenceIndicator {
+        type convergenceIndicator;
+        scalarFields (p);
+        vectorFields (U);
+    }
+}

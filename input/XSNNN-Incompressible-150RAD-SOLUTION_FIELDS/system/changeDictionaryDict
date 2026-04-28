@@ -1,0 +1,1187 @@
+FoamFile {
+    version 2.0;
+    format ascii;
+    class dictionary;
+    object changeDictionaryDict;
+}
+boundary {
+    face6 {
+        type wall;
+    }
+    face5 {
+        type wall;
+    }
+    face3 {
+        type wall;
+    }
+    face1 {
+        type wall;
+    }
+    face187 {
+        type wall;
+    }
+    face267 {
+        type wall;
+    }
+    face158 {
+        type wall;
+    }
+    face128 {
+        type wall;
+    }
+    face139 {
+        type wall;
+    }
+    face211 {
+        type wall;
+    }
+    face150 {
+        type wall;
+    }
+    face34 {
+        type wall;
+    }
+    face340 {
+        type wall;
+    }
+    face180 {
+        type wall;
+    }
+    face364 {
+        type wall;
+    }
+    face298 {
+        type wall;
+    }
+    face315 {
+        type wall;
+    }
+    face41 {
+        type wall;
+    }
+    face244 {
+        type wall;
+    }
+    face368 {
+        type wall;
+    }
+    face179 {
+        type wall;
+    }
+    face39 {
+        type wall;
+    }
+    face186 {
+        type wall;
+    }
+    face343 {
+        type wall;
+    }
+    face324 {
+        type wall;
+    }
+    face178 {
+        type wall;
+    }
+    face264 {
+        type wall;
+    }
+    face59 {
+        type wall;
+    }
+    face339 {
+        type wall;
+    }
+    face55 {
+        type wall;
+    }
+    face125 {
+        type wall;
+    }
+    face90 {
+        type wall;
+    }
+    face103 {
+        type wall;
+    }
+    face84 {
+        type wall;
+    }
+    face196 {
+        type wall;
+    }
+    face346 {
+        type wall;
+    }
+    face215 {
+        type wall;
+    }
+    face313 {
+        type wall;
+    }
+    face304 {
+        type wall;
+    }
+    face292 {
+        type wall;
+    }
+    face282 {
+        type wall;
+    }
+    face42 {
+        type wall;
+    }
+    face183 {
+        type wall;
+    }
+    face286 {
+        type wall;
+    }
+    face241 {
+        type wall;
+    }
+    face67 {
+        type wall;
+    }
+    face111 {
+        type wall;
+    }
+    face85 {
+        type wall;
+    }
+    face146 {
+        type wall;
+    }
+    face188 {
+        type wall;
+    }
+    face184 {
+        type wall;
+    }
+    face255 {
+        type wall;
+    }
+    face323 {
+        type wall;
+    }
+    face167 {
+        type wall;
+    }
+    face291 {
+        type wall;
+    }
+    face17 {
+        type wall;
+    }
+    face274 {
+        type wall;
+    }
+    face316 {
+        type wall;
+    }
+    face398 {
+        type wall;
+    }
+    face134 {
+        type wall;
+    }
+    face116 {
+        type wall;
+    }
+    face112 {
+        type wall;
+    }
+    face372 {
+        type wall;
+    }
+    face308 {
+        type wall;
+    }
+    face98 {
+        type wall;
+    }
+    face195 {
+        type wall;
+    }
+    face243 {
+        type wall;
+    }
+    face231 {
+        type wall;
+    }
+    face230 {
+        type wall;
+    }
+    face107 {
+        type wall;
+    }
+    face249 {
+        type wall;
+    }
+    face73 {
+        type wall;
+    }
+    face99 {
+        type wall;
+    }
+    face369 {
+        type wall;
+    }
+    face106 {
+        type wall;
+    }
+    face209 {
+        type wall;
+    }
+    face102 {
+        type wall;
+    }
+    face181 {
+        type wall;
+    }
+    face8 {
+        type wall;
+    }
+    face299 {
+        type wall;
+    }
+    face22 {
+        type wall;
+    }
+    face46 {
+        type wall;
+    }
+    face251 {
+        type wall;
+    }
+    face95 {
+        type wall;
+    }
+    face175 {
+        type wall;
+    }
+    face307 {
+        type wall;
+    }
+    face217 {
+        type wall;
+    }
+    face114 {
+        type wall;
+    }
+    face263 {
+        type wall;
+    }
+    face52 {
+        type wall;
+    }
+    face152 {
+        type wall;
+    }
+    face253 {
+        type wall;
+    }
+    face200 {
+        type wall;
+    }
+    face108 {
+        type wall;
+    }
+    face144 {
+        type wall;
+    }
+    face239 {
+        type wall;
+    }
+    face78 {
+        type wall;
+    }
+    face70 {
+        type wall;
+    }
+    face191 {
+        type wall;
+    }
+    face245 {
+        type wall;
+    }
+    face322 {
+        type wall;
+    }
+    face374 {
+        type wall;
+    }
+    face151 {
+        type wall;
+    }
+    face317 {
+        type wall;
+    }
+    face143 {
+        type wall;
+    }
+    face206 {
+        type wall;
+    }
+    face278 {
+        type wall;
+    }
+    face393 {
+        type wall;
+    }
+    face12 {
+        type wall;
+    }
+    face79 {
+        type wall;
+    }
+    face44 {
+        type wall;
+    }
+    face132 {
+        type wall;
+    }
+    face214 {
+        type wall;
+    }
+    face273 {
+        type wall;
+    }
+    face185 {
+        type wall;
+    }
+    face93 {
+        type wall;
+    }
+    face131 {
+        type wall;
+    }
+    face97 {
+        type wall;
+    }
+    face295 {
+        type wall;
+    }
+    face110 {
+        type wall;
+    }
+    face163 {
+        type wall;
+    }
+    face47 {
+        type wall;
+    }
+    face270 {
+        type wall;
+    }
+    face135 {
+        type wall;
+    }
+    face9 {
+        type wall;
+    }
+    face169 {
+        type wall;
+    }
+    face344 {
+        type wall;
+    }
+    face310 {
+        type wall;
+    }
+    face133 {
+        type wall;
+    }
+    face329 {
+        type wall;
+    }
+    face306 {
+        type wall;
+    }
+    face261 {
+        type wall;
+    }
+    face256 {
+        type wall;
+    }
+    face176 {
+        type wall;
+    }
+    face277 {
+        type wall;
+    }
+    face174 {
+        type wall;
+    }
+    face379 {
+        type wall;
+    }
+    face262 {
+        type wall;
+    }
+    face375 {
+        type wall;
+    }
+    face290 {
+        type wall;
+    }
+    face391 {
+        type wall;
+    }
+    face88 {
+        type wall;
+    }
+    face381 {
+        type wall;
+    }
+    face83 {
+        type wall;
+    }
+    face89 {
+        type wall;
+    }
+    face154 {
+        type wall;
+    }
+    face357 {
+        type wall;
+    }
+    face389 {
+        type wall;
+    }
+    face147 {
+        type wall;
+    }
+    face30 {
+        type wall;
+    }
+    face193 {
+        type wall;
+    }
+    face275 {
+        type wall;
+    }
+    face173 {
+        type wall;
+    }
+    face126 {
+        type wall;
+    }
+    face82 {
+        type wall;
+    }
+    face234 {
+        type wall;
+    }
+    face235 {
+        type wall;
+    }
+    face101 {
+        type wall;
+    }
+    face279 {
+        type wall;
+    }
+    face378 {
+        type wall;
+    }
+    face177 {
+        type wall;
+    }
+    face48 {
+        type wall;
+    }
+    face117 {
+        type wall;
+    }
+    face312 {
+        type wall;
+    }
+    face366 {
+        type wall;
+    }
+    face148 {
+        type wall;
+    }
+    face210 {
+        type wall;
+    }
+    face65 {
+        type wall;
+    }
+    face162 {
+        type wall;
+    }
+    face314 {
+        type wall;
+    }
+    face220 {
+        type wall;
+    }
+    face27 {
+        type wall;
+    }
+    face351 {
+        type wall;
+    }
+    face347 {
+        type wall;
+    }
+    face171 {
+        type wall;
+    }
+    face159 {
+        type wall;
+    }
+    face29 {
+        type wall;
+    }
+    face145 {
+        type wall;
+    }
+    face349 {
+        type wall;
+    }
+    face166 {
+        type wall;
+    }
+    face350 {
+        type wall;
+    }
+    face229 {
+        type wall;
+    }
+    face302 {
+        type wall;
+    }
+    face305 {
+        type wall;
+    }
+    face69 {
+        type wall;
+    }
+    face190 {
+        type wall;
+    }
+    face377 {
+        type wall;
+    }
+    face123 {
+        type wall;
+    }
+    face77 {
+        type wall;
+    }
+    face122 {
+        type wall;
+    }
+    face311 {
+        type wall;
+    }
+    face118 {
+        type wall;
+    }
+    face72 {
+        type wall;
+    }
+    face10 {
+        type wall;
+    }
+    face100 {
+        type wall;
+    }
+    face240 {
+        type wall;
+    }
+    face272 {
+        type wall;
+    }
+    face127 {
+        type wall;
+    }
+    face221 {
+        type wall;
+    }
+    face390 {
+        type wall;
+    }
+    face202 {
+        type wall;
+    }
+    face336 {
+        type wall;
+    }
+    face115 {
+        type wall;
+    }
+    face91 {
+        type wall;
+    }
+    face268 {
+        type wall;
+    }
+    face81 {
+        type wall;
+    }
+    face119 {
+        type wall;
+    }
+    face236 {
+        type wall;
+    }
+    face320 {
+        type wall;
+    }
+    face266 {
+        type wall;
+    }
+    face170 {
+        type wall;
+    }
+    face371 {
+        type wall;
+    }
+    face121 {
+        type wall;
+    }
+    face355 {
+        type wall;
+    }
+    face14 {
+        type wall;
+    }
+    face160 {
+        type wall;
+    }
+    face321 {
+        type wall;
+    }
+    face367 {
+        type wall;
+    }
+    face141 {
+        type wall;
+    }
+    face331 {
+        type wall;
+    }
+    face53 {
+        type wall;
+    }
+    face333 {
+        type wall;
+    }
+    face361 {
+        type wall;
+    }
+    face228 {
+        type wall;
+    }
+    face23 {
+        type wall;
+    }
+    face153 {
+        type wall;
+    }
+    face287 {
+        type wall;
+    }
+    face64 {
+        type wall;
+    }
+    face345 {
+        type wall;
+    }
+    face201 {
+        type wall;
+    }
+    face260 {
+        type wall;
+    }
+    face297 {
+        type wall;
+    }
+    face124 {
+        type wall;
+    }
+    face86 {
+        type wall;
+    }
+    face363 {
+        type wall;
+    }
+    face382 {
+        type wall;
+    }
+    face26 {
+        type wall;
+    }
+    face216 {
+        type wall;
+    }
+    face226 {
+        type wall;
+    }
+    face74 {
+        type wall;
+    }
+    face21 {
+        type wall;
+    }
+    face80 {
+        type wall;
+    }
+    face386 {
+        type wall;
+    }
+    face149 {
+        type wall;
+    }
+    face199 {
+        type wall;
+    }
+    face257 {
+        type wall;
+    }
+    face233 {
+        type wall;
+    }
+    face289 {
+        type wall;
+    }
+    face43 {
+        type wall;
+    }
+    face11 {
+        type wall;
+    }
+    face66 {
+        type wall;
+    }
+    face192 {
+        type wall;
+    }
+    face25 {
+        type wall;
+    }
+    face227 {
+        type wall;
+    }
+    face7 {
+        type wall;
+    }
+    face334 {
+        type wall;
+    }
+    face276 {
+        type wall;
+    }
+    face280 {
+        type wall;
+    }
+    face104 {
+        type wall;
+    }
+    face198 {
+        type wall;
+    }
+    face207 {
+        type wall;
+    }
+    face301 {
+        type wall;
+    }
+    face338 {
+        type wall;
+    }
+    face309 {
+        type wall;
+    }
+    face380 {
+        type wall;
+    }
+    face58 {
+        type wall;
+    }
+    face137 {
+        type wall;
+    }
+    face19 {
+        type wall;
+    }
+    face365 {
+        type wall;
+    }
+    face71 {
+        type wall;
+    }
+    face31 {
+        type wall;
+    }
+    face232 {
+        type wall;
+    }
+    face136 {
+        type wall;
+    }
+    face87 {
+        type wall;
+    }
+    face318 {
+        type wall;
+    }
+    face332 {
+        type wall;
+    }
+    face285 {
+        type wall;
+    }
+    face212 {
+        type wall;
+    }
+    face60 {
+        type wall;
+    }
+    face237 {
+        type wall;
+    }
+    face348 {
+        type wall;
+    }
+    face397 {
+        type wall;
+    }
+    face387 {
+        type wall;
+    }
+    face383 {
+        type wall;
+    }
+    face76 {
+        type wall;
+    }
+    face356 {
+        type wall;
+    }
+    face94 {
+        type wall;
+    }
+    face203 {
+        type wall;
+    }
+    face213 {
+        type wall;
+    }
+    face18 {
+        type wall;
+    }
+    face75 {
+        type wall;
+    }
+    face208 {
+        type wall;
+    }
+    face246 {
+        type wall;
+    }
+    face49 {
+        type wall;
+    }
+    face328 {
+        type wall;
+    }
+    face32 {
+        type wall;
+    }
+    face62 {
+        type wall;
+    }
+    face242 {
+        type wall;
+    }
+    face337 {
+        type wall;
+    }
+    face362 {
+        type wall;
+    }
+    face248 {
+        type wall;
+    }
+    face155 {
+        type wall;
+    }
+    face57 {
+        type wall;
+    }
+    face326 {
+        type wall;
+    }
+    face15 {
+        type wall;
+    }
+    face388 {
+        type wall;
+    }
+    face168 {
+        type wall;
+    }
+    face197 {
+        type wall;
+    }
+    face45 {
+        type wall;
+    }
+    face254 {
+        type wall;
+    }
+    face247 {
+        type wall;
+    }
+    face13 {
+        type wall;
+    }
+    face283 {
+        type wall;
+    }
+    face96 {
+        type wall;
+    }
+    face172 {
+        type wall;
+    }
+    face354 {
+        type wall;
+    }
+    face156 {
+        type wall;
+    }
+    face189 {
+        type wall;
+    }
+    face28 {
+        type wall;
+    }
+    face335 {
+        type wall;
+    }
+    face113 {
+        type wall;
+    }
+    face164 {
+        type wall;
+    }
+    face353 {
+        type wall;
+    }
+    face392 {
+        type wall;
+    }
+    face142 {
+        type wall;
+    }
+    face120 {
+        type wall;
+    }
+    face385 {
+        type wall;
+    }
+    face219 {
+        type wall;
+    }
+    face325 {
+        type wall;
+    }
+    face109 {
+        type wall;
+    }
+    face271 {
+        type wall;
+    }
+    face394 {
+        type wall;
+    }
+    face20 {
+        type wall;
+    }
+    face360 {
+        type wall;
+    }
+    face395 {
+        type wall;
+    }
+    face238 {
+        type wall;
+    }
+    face130 {
+        type wall;
+    }
+    face140 {
+        type wall;
+    }
+    face63 {
+        type wall;
+    }
+    face204 {
+        type wall;
+    }
+    face138 {
+        type wall;
+    }
+    face16 {
+        type wall;
+    }
+    face68 {
+        type wall;
+    }
+    face359 {
+        type wall;
+    }
+    face370 {
+        type wall;
+    }
+    face35 {
+        type wall;
+    }
+    face33 {
+        type wall;
+    }
+    face296 {
+        type wall;
+    }
+    face50 {
+        type wall;
+    }
+    face373 {
+        type wall;
+    }
+    face36 {
+        type wall;
+    }
+    face294 {
+        type wall;
+    }
+    face92 {
+        type wall;
+    }
+    face300 {
+        type wall;
+    }
+    face376 {
+        type wall;
+    }
+    face205 {
+        type wall;
+    }
+    face129 {
+        type wall;
+    }
+    face157 {
+        type wall;
+    }
+    face38 {
+        type wall;
+    }
+    face56 {
+        type wall;
+    }
+    face384 {
+        type wall;
+    }
+    face222 {
+        type wall;
+    }
+    face330 {
+        type wall;
+    }
+    face352 {
+        type wall;
+    }
+    face252 {
+        type wall;
+    }
+    face319 {
+        type wall;
+    }
+    face61 {
+        type wall;
+    }
+    face259 {
+        type wall;
+    }
+    face40 {
+        type wall;
+    }
+    face105 {
+        type wall;
+    }
+    face218 {
+        type wall;
+    }
+    face281 {
+        type wall;
+    }
+    face258 {
+        type wall;
+    }
+    face288 {
+        type wall;
+    }
+    face37 {
+        type wall;
+    }
+    face303 {
+        type wall;
+    }
+    face165 {
+        type wall;
+    }
+    face396 {
+        type wall;
+    }
+    face54 {
+        type wall;
+    }
+    face161 {
+        type wall;
+    }
+    face293 {
+        type wall;
+    }
+    face265 {
+        type wall;
+    }
+    face51 {
+        type wall;
+    }
+    face194 {
+        type wall;
+    }
+    face358 {
+        type wall;
+    }
+    face342 {
+        type wall;
+    }
+    face284 {
+        type wall;
+    }
+    face341 {
+        type wall;
+    }
+    face269 {
+        type wall;
+    }
+    face24 {
+        type wall;
+    }
+    face250 {
+        type wall;
+    }
+    face327 {
+        type wall;
+    }
+    face182 {
+        type wall;
+    }
+}

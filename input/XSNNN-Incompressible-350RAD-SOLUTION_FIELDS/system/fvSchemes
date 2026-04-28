@@ -1,0 +1,40 @@
+FoamFile {
+    version 2.0;
+    format ascii;
+    class dictionary;
+    object fvSchemes;
+}
+ddtSchemes {
+    default steadyState;
+}
+gradSchemes {
+    default cellLimited leastSquares 1.0;
+    grad(p) cellLimited leastSquares 1.0;
+    grad(U) cellLimited leastSquares 1.0;
+}
+divSchemes {
+    default Gauss linear;
+    div(phi,U) bounded Gauss localBlended upwind linearUpwindV grad(U);
+    div(phi,k) bounded Gauss upwind;
+    div(((rho*nuEff)*dev2(T(grad(U))))) Gauss linear;
+    div(phi,omega) bounded Gauss upwind;
+}
+laplacianSchemes {
+    default Gauss linear limited corrected 0.5;
+    laplacian((rho*nuEff),U) Gauss linear limited corrected 0.5;
+    laplacian((rhoRef|A(U)),p) relaxedNonOrthoGauss linear limited corrected 0.5;
+}
+interpolationSchemes {
+    default linear;
+    interpolate(HbyA) linear;
+}
+snGradSchemes {
+    default limited 0.5;
+}
+wallDist {
+    method meshWave;
+}
+fluxRequired {
+    default no;
+    p ;
+}

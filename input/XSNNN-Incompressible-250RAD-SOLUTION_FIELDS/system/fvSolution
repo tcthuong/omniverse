@@ -1,0 +1,69 @@
+FoamFile {
+    version 2.0;
+    format ascii;
+    class dictionary;
+    object fvSolution;
+}
+solvers {
+    U {
+        solver PBiCGStab;
+        tolerance 1e-08;
+        relTol 0.01;
+        minIter 1;
+        maxIter 1000;
+        preconditioner DILU;
+    }
+    p {
+        solver GAMG;
+        tolerance 1e-06;
+        relTol 0.001;
+        minIter 1;
+        maxIter 1000;
+        smoother GaussSeidel;
+        nPreSweeps 2;
+        nPostSweeps 1;
+        cacheAgglomeration on;
+        agglomerator faceAreaPair;
+        nCellsInCoarsestLevel 100;
+        mergeLevels 1;
+    }
+    k {
+        solver PBiCGStab;
+        tolerance 1e-08;
+        relTol 0.01;
+        minIter 1;
+        maxIter 1000;
+        preconditioner DILU;
+    }
+    omega {
+        solver PBiCGStab;
+        tolerance 1e-08;
+        relTol 0.01;
+        minIter 1;
+        maxIter 1000;
+        preconditioner DILU;
+    }
+}
+relaxationFactors {
+    fields {
+        p 0.3;
+    }
+    equations {
+        U 0.7;
+        k 0.3;
+        omega 0.3;
+        "\(min\(\(\(.*\*mag\(SndGrad\(p\)\)\)\|\(\(.*\*mag\(snGradCorr\(p\)\)\)\+small\)\),one\)\*snGradCorr\(p\)\)" 0.3;
+        snGradCorr(p) 0.3;
+    }
+}
+SIMPLE {
+    nNonOrthogonalCorrectors 1;
+    pRefCell 0;
+    pRefValue 0.0;
+    residualControl {
+        U 1e-06;
+        "p.*" 1e-06;
+        k 1e-06;
+        omega 1e-06;
+    }
+}
