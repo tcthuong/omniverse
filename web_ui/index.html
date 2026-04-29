@@ -2,71 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CFD WebRTC Dashboard</title>
-    <!-- Modern Font: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./style.css">
   </head>
   <body>
-    <!-- Fullscreen Video Placeholder for Omniverse WebRTC Stream -->
-    <div id="webrtc-stream-container">
-        <!-- Simulating the 3D viewport with a CSS background -->
-        <div class="stream-placeholder">
-           <span class="stream-text">Omniverse WebRTC Stream (Connected)</span>
-        </div>
-    </div>
-
-    <!-- Floating UI Panel -->
-    <div class="floating-panel glassmorphism">
-      <div class="panel-header">
-        <h2 class="title">Volume Trace</h2>
-        <span class="status-indicator"></span>
-      </div>
-
-      <div class="panel-body">
-        <!-- Speed Control Section -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Speed Control</span>
-            <span class="icon-info">i</span>
-          </div>
-          
-          <div class="slider-container">
-            <span class="slider-val-min">150</span>
-            <input type="range" id="rpmSlider" min="150" max="350" value="150" class="custom-slider">
-            <span class="slider-val-max">350</span>
-          </div>
-          <div class="current-value">
-            <span id="rpmValueDisplay">150</span> <span class="unit">RPM</span>
-          </div>
-        </div>
-
-        <!-- Divider -->
-        <div class="divider"></div>
-
-        <!-- Velocity Legend Section -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Velocity Magnitude</span>
-            <span class="icon-info">i</span>
-          </div>
-          
-          <div class="legend-container">
-            <div class="legend-bar turbo-gradient"></div>
-            <div class="legend-labels">
-              <span>0</span>
-              <span>25</span>
-              <span>50</span>
-              <span>75</span>
-              <span>100</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <script type="module" src="./main.js"></script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

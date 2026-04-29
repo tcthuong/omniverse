@@ -1,4 +1,8 @@
-import json, time, shutil, re
+import argparse
+import json
+import re
+import shutil
+import time
 from pathlib import Path
 import numpy as np
 import torch
@@ -8,6 +12,105 @@ from scipy.spatial import cKDTree
 import physicsnemo
 from physicsnemo.models.meshgraphnet import MeshGraphNet
 from torch_geometric.data import Data
+
+DEFAULT_CONFIG = {
+    "input": "input",
+    "out": "out_outputs",
+    "subsample": 300_000,
+    "k_neighbors": 8,
+    "epochs": 3000,
+    "save_every": 20,
+    "lr": 1e-3,
+    "lr_min": 1e-5,
+    "seed": 0,
+    "infer_frames": 21,
+    "validation_omega": None,
+    "device": "auto",
+    "processor_size": 8,
+    "hidden_dim": 64,
+    "checkpoint_segments": 4,
+    "resume": None,
+    "make_zip": True,
+}
+
+
+def parse_args() -> dict:
+    parser = argparse.ArgumentParser(
+        description="Train a PhysicsNeMo MeshGraphNet surrogate from OpenFOAM cases."
+    )
+    parser.add_argument("--config", type=Path, help="Optional JSON config file.")
+    parser.add_argument(
+        "--write-default-config",
+        type=Path,
+        help="Write the default JSON config to this path and exit.",
+    )
+    parser.add_argument("--input", dest="input", type=str, help="OpenFOAM input directory.")
+    parser.add_argument("--out", dest="out", type=str, help="Training output directory.")
+    parser.add_argument("--subsample", type=int, help="Maximum number of cells to sample.")
+    parser.add_argument("--k-neighbors", type=int, help="KNN graph neighbors per node.")
+    parser.add_argument("--epochs", type=int, help="Number of training epochs.")
+    parser.add_argument("--save-every", type=int, help="Checkpoint cadence in epochs.")
+    parser.add_argument("--lr", type=float, help="Initial learning rate.")
+    parser.add_argument("--lr-min", type=float, help="Minimum cosine schedule LR.")
+    parser.add_argument("--seed", type=int, help="Sampling seed.")
+    parser.add_argument("--infer-frames", type=int, help="Number of inference sweep frames.")
+    parser.add_argument("--validation-omega", type=float, help="Omega value held out for validation.")
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cpu", "cuda"],
+        help="Training device. 'auto' uses CUDA when available.",
+    )
+    parser.add_argument("--processor-size", type=int, help="MeshGraphNet processor blocks.")
+    parser.add_argument("--hidden-dim", type=int, help="Hidden dimension for MGN MLPs.")
+    parser.add_argument("--checkpoint-segments", type=int, help="Processor checkpoint segments.")
+    parser.add_argument("--resume", type=str, help="Checkpoint .pt to load before training.")
+    parser.add_argument("--no-zip", action="store_true", help="Skip final output zip archive.")
+
+    args = parser.parse_args()
+
+    if args.write_default_config:
+        args.write_default_config.write_text(json.dumps(DEFAULT_CONFIG, indent=2))
+        print(f"Wrote default config: {args.write_default_config}")
+        raise SystemExit(0)
+
+    cfg = dict(DEFAULT_CONFIG)
+    if args.config:
+        loaded = json.loads(args.config.read_text())
+        unknown = sorted(set(loaded) - set(DEFAULT_CONFIG))
+        if unknown:
+            raise ValueError(f"unknown config key(s): {unknown}")
+        cfg.update(loaded)
+
+    overrides = vars(args)
+    for key in DEFAULT_CONFIG:
+        if key == "make_zip":
+            continue
+        value = overrides.get(key)
+        if value is not None:
+            cfg[key] = value
+    if args.no_zip:
+        cfg["make_zip"] = False
+
+    return cfg
+
+
+def choose_device(requested: str) -> str:
+    if requested == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    if requested == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but torch.cuda.is_available() is false")
+    return requested
+
+
+def load_model_checkpoint(model: nn.Module, path: str | None, device: str) -> None:
+    if not path:
+        return
+    ckpt_path = Path(path)
+    checkpoint = torch.load(ckpt_path, map_location=device)
+    if isinstance(checkpoint, dict) and "model_state" in checkpoint:
+        checkpoint = checkpoint["model_state"]
+    model.load_state_dict(checkpoint)
+    print(f"Resumed model weights from {ckpt_path.resolve()}")
 
 def read_omega(case_dir: Path) -> float:
     """Pull rotation speed from constant/MRFProperties (authoritative) or folder name."""
@@ -30,17 +133,22 @@ def extract(path: Path):
     return cc, f
 
 def main():
+    cfg = parse_args()
     print('torch', torch.__version__, '  cuda', torch.cuda.is_available(),
           '  gpu', torch.cuda.get_device_name() if torch.cuda.is_available() else '-')
     print('physicsnemo', physicsnemo.__version__)
+    print("config:")
+    print(json.dumps(cfg, indent=2))
 
     # Local paths
-    INPUT = Path('input')
-    if not INPUT.is_dir():
+    INPUT = Path(cfg["input"])
+    if not INPUT.is_dir() and cfg["input"] == DEFAULT_CONFIG["input"]:
         INPUT = Path('D:/Work/input')
     print('INPUT =', INPUT.resolve())
     
-    OUT = Path('out')
+    if int(cfg["infer_frames"]) < 2:
+        raise ValueError("infer_frames must be at least 2")
+    OUT = Path(cfg["out"])
     OUT.mkdir(exist_ok=True)
 
     # 1 - Discover + extract every case in input/
@@ -64,24 +172,30 @@ def main():
     # 2 - Train / val split (middle omega = validation, rest = training)
     if len(OMEGAS) < 3:
         raise ValueError('need at least 3 cases for interpolation-style LOO split')
-    VAL_OM = [OMEGAS[len(OMEGAS)//2]]
+    if cfg["validation_omega"] is None:
+        VAL_OM = [OMEGAS[len(OMEGAS)//2]]
+    else:
+        val_om = float(cfg["validation_omega"])
+        if val_om not in OMEGAS:
+            raise ValueError(f"validation_omega={val_om} is not in available omegas {OMEGAS}")
+        VAL_OM = [val_om]
     TRAIN_OM = [om for om in OMEGAS if om not in VAL_OM]
-    INFER_OM = np.linspace(min(OMEGAS), max(OMEGAS), 21).tolist()
+    INFER_OM = np.linspace(min(OMEGAS), max(OMEGAS), int(cfg["infer_frames"])).tolist()
     print(f'train: {TRAIN_OM}')
     print(f'val  : {VAL_OM}')
     print(f'infer: {INFER_OM[0]:.0f} -> {INFER_OM[-1]:.0f} ({len(INFER_OM)} frames)')
 
     # 3 - Importance-weighted subsample + KNN graph
     print("\n--- Subsampling & KNN ---")
-    SUBSAMPLE = 300_000
-    K_NEIGHBORS = 8
+    SUBSAMPLE = int(cfg["subsample"])
+    K_NEIGHBORS = int(cfg["k_neighbors"])
 
     mag = np.zeros(cc.shape[0], np.float32)
     for om in TRAIN_OM:
         mag = np.maximum(mag, np.linalg.norm(cases[om]['U'], axis=1) / om)
     w = 0.3/len(mag) + 0.7*mag/mag.sum()
     w = w/w.sum()
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(int(cfg["seed"]))
     N = cc.shape[0]
     sub_idx = np.sort(rng.choice(N, size=min(SUBSAMPLE, N), replace=False, p=w))
     cc_s = cc[sub_idx]
@@ -101,7 +215,7 @@ def main():
 
     # 4 - Physics-informed normalization
     print("\n--- Normalization ---")
-    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+    DEVICE = choose_device(str(cfg["device"]))
 
     b_min, b_max = cc_s.min(0), cc_s.max(0)
     b_cen, b_half = 0.5*(b_min+b_max), 0.5*(b_max-b_min)
@@ -166,22 +280,23 @@ def main():
         input_dim_nodes=4,
         input_dim_edges=4,
         output_dim=7,
-        processor_size=8,
-        hidden_dim_node_encoder=64,
-        hidden_dim_edge_encoder=64,
-        hidden_dim_processor=64,
-        hidden_dim_node_decoder=64,
+        processor_size=int(cfg["processor_size"]),
+        hidden_dim_node_encoder=int(cfg["hidden_dim"]),
+        hidden_dim_edge_encoder=int(cfg["hidden_dim"]),
+        hidden_dim_processor=int(cfg["hidden_dim"]),
+        hidden_dim_node_decoder=int(cfg["hidden_dim"]),
         mlp_activation_fn='silu',
-        num_processor_checkpoint_segments=4, 
+        num_processor_checkpoint_segments=int(cfg["checkpoint_segments"]),
         recompute_activation=False,
     ).to(DEVICE)
+    load_model_checkpoint(model, cfg["resume"], DEVICE)
     print(f'params: {sum(p.numel() for p in model.parameters())/1e6:.2f}M')
 
     # 6 - Train
     print("\n--- Training ---")
-    EPOCHS = 3000
-    SAVE_EVERY = 20
-    LR, LR_MIN = 1e-3, 1e-5
+    EPOCHS = int(cfg["epochs"])
+    SAVE_EVERY = int(cfg["save_every"])
+    LR, LR_MIN = float(cfg["lr"]), float(cfg["lr_min"])
 
     X_tr = {om: torch.from_numpy(node_feat(cc_s, om, stats)).to(DEVICE) for om in TRAIN_OM}
     y_tr = {om: torch.from_numpy(targets(cases_s[om], om, stats)).to(DEVICE) for om in TRAIN_OM}
@@ -248,9 +363,12 @@ def main():
     np.save(OUT/'sub_idx.npy', sub_idx)
     print(f'{len(frames)} frames; predictions.npz = {(OUT/"predictions.npz").stat().st_size/1e6:.1f} MB')
 
-    zp = Path('out_outputs.zip')
-    shutil.make_archive(str(zp.with_suffix('')), 'zip', str(OUT))
-    print(f'Saved all output files to {zp}  ({zp.stat().st_size/1e6:.1f} MB)')
+    if cfg["make_zip"]:
+        zp = OUT.with_suffix('.zip')
+        shutil.make_archive(str(zp.with_suffix('')), 'zip', str(OUT))
+        print(f'Saved all output files to {zp}  ({zp.stat().st_size/1e6:.1f} MB)')
+    else:
+        print('Skipped zip archive (--no-zip).')
     print("Done! You can now use the outputs locally.")
 if __name__ == '__main__':
     main()
