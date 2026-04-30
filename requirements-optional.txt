@@ -1,0 +1,2 @@
+matplotlib==3.10.9
+usd-core==26.5
