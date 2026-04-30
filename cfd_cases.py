@@ -1,6 +1,7 @@
 """Shared OpenFOAM case discovery helpers."""
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,8 +9,13 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class CfdCase:
-    omega: float
+    omega: float  # rad/s
     path: Path
+
+    @property
+    def rpm(self) -> float:
+        """Rotation speed in RPM (user-facing unit)."""
+        return self.omega * 30.0 / math.pi
 
 
 def resolve_input_dir(input_dir: str | Path = "input", base_dir: Path | None = None) -> Path:

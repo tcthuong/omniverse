@@ -32,6 +32,8 @@ DEFAULT_CONFIG = {
     "checkpoint_segments": 4,
     "resume": None,
     "make_zip": True,
+    "pi_weight": 0.0,
+    "pi_ridge": 1e-6,
 }
 
 
@@ -66,6 +68,16 @@ def parse_args() -> dict:
     parser.add_argument("--checkpoint-segments", type=int, help="Processor checkpoint segments.")
     parser.add_argument("--resume", type=str, help="Checkpoint .pt to load before training.")
     parser.add_argument("--no-zip", action="store_true", help="Skip final output zip archive.")
+    parser.add_argument(
+        "--pi-weight",
+        type=float,
+        help="Weight for physics-informed continuity loss (incompressible div(U)=0). 0 disables.",
+    )
+    parser.add_argument(
+        "--pi-ridge",
+        type=float,
+        help="Tikhonov ridge added to MLS normal equations for stability.",
+    )
 
     args = parser.parse_args()
 
@@ -202,6 +214,17 @@ def main():
     edge_index_np = np.stack([src, dst], axis=0).astype(np.int64)
     print(f'KNN graph: {len(src):,} edges  ({time.time()-t0:.1f}s)')
 
+    # MLS gradient operator (physical units): per-node weights W (3, K) such that
+    # grad(f) at node n approximates W_n @ (f[neighbors] - f[n]).
+    PI_WEIGHT = float(cfg["pi_weight"])
+    PI_RIDGE = float(cfg["pi_ridge"])
+    rel_per_node = rel.reshape(len(cc_s), K_NEIGHBORS, 3).astype(np.float32)
+    RtR = np.einsum('nki,nkj->nij', rel_per_node, rel_per_node)
+    RtR += PI_RIDGE * np.eye(3, dtype=np.float32)[None, :, :]
+    RtR_inv = np.linalg.inv(RtR).astype(np.float32)
+    mls_W = np.einsum('nij,nkj->nik', RtR_inv, rel_per_node).astype(np.float32)  # (N, 3, K)
+    neighbor_idx_np = nbrs[:, 1:].astype(np.int64)
+
     # 4 - Physics-informed normalization
     print("\n--- Normalization ---")
     DEVICE = choose_device(str(cfg["device"]))
@@ -219,6 +242,7 @@ def main():
     nu_cat = np.concatenate(nus); lom_cat = np.concatenate(lom)
 
     stats = {
+        'arch': 'mgn',
         'coord_center': b_cen.tolist(), 'coord_half': b_half.tolist(), 'omega_max': om_max,
         'U_mean': U_cat.mean(0).tolist(), 'U_std': U_cat.std(0).tolist(),
         'p_mean': float(p_cat.mean()), 'p_std': float(p_cat.std()),
@@ -295,6 +319,25 @@ def main():
     opt = torch.optim.Adam(model.parameters(), lr=LR)
     sch = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EPOCHS, eta_min=LR_MIN)
 
+    # Physics-informed continuity setup (incompressible: omega * sum_i U_std_i * dU_norm_i/dx_i = 0).
+    pi_enabled = PI_WEIGHT > 0.0
+    if pi_enabled:
+        mls_W_t = torch.from_numpy(mls_W).to(DEVICE)              # (N, 3, K)
+        neighbor_idx_t = torch.from_numpy(neighbor_idx_np).to(DEVICE)  # (N, K)
+        U_std_t = torch.tensor(stats['U_std'], dtype=torch.float32, device=DEVICE)  # (3,)
+        print(f'physics-informed continuity loss enabled (weight={PI_WEIGHT}, ridge={PI_RIDGE})')
+
+    def continuity_residual(pred):
+        # pred: (N, 7); pred[:, :3] is U_norm. Returns scalar mean-squared divergence.
+        U_norm = pred[:, :3]
+        U_neighbors = U_norm[neighbor_idx_t]                    # (N, K, 3)
+        delta = U_neighbors - U_norm.unsqueeze(1)               # (N, K, 3)
+        # grad[n, j, i] = dU_norm_i / dx_j at node n
+        grad = torch.einsum('njk,nki->nji', mls_W_t, delta)     # (N, 3, 3)
+        diag = grad.diagonal(dim1=1, dim2=2)                    # (N, 3): dU_i/dx_i
+        div = (diag * U_std_t).sum(dim=1)                       # (N,) up to omega scalar
+        return (div ** 2).mean()
+
     def save_ckpt(tag='checkpoint'):
         torch.save(model.state_dict(), OUT / f'{tag}.pt')
         (OUT/'training_log.json').write_text(json.dumps(log, indent=2))
@@ -306,18 +349,26 @@ def main():
             model.train()
             om = TRAIN_OM[ep % len(TRAIN_OM)]
             pred = model(X_tr[om], edge_tensor, graph)
-            loss = ((pred - y_tr[om])**2).mean()
+            data_loss = ((pred - y_tr[om])**2).mean()
+            if pi_enabled:
+                pi_loss = continuity_residual(pred)
+                loss = data_loss + PI_WEIGHT * pi_loss
+                pl_val = pi_loss.item()
+            else:
+                loss = data_loss
+                pl_val = 0.0
             opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sch.step()
-            tl = loss.item()
+            tl = data_loss.item()
 
             model.eval()
             with torch.no_grad():
                 vp = model(X_va, edge_tensor, graph)
                 vlm = ((vp - y_va)**2).mean().item()
-            log.append({'epoch': ep, 'train': tl, 'val': vlm,
+            log.append({'epoch': ep, 'train': tl, 'val': vlm, 'pi': pl_val,
                         'lr': sch.get_last_lr()[0], 't': time.time()-t0})
             if ep % 10 == 0 or ep == EPOCHS-1:
-                print(f'ep {ep:3d}  train={tl:.4e}  val={vlm:.4e}  t={time.time()-t0:.0f}s')
+                pi_str = f'  pi={pl_val:.4e}' if pi_enabled else ''
+                print(f'ep {ep:3d}  train={tl:.4e}  val={vlm:.4e}{pi_str}  t={time.time()-t0:.0f}s')
             if vlm < best_val:
                 best_val = vlm
                 save_ckpt('checkpoint_best')

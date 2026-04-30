@@ -1,9 +1,14 @@
 import { AppStreamer, LogLevel, StreamType } from '@nvidia/omniverse-webrtc-streaming-library';
 import './style.css';
 
-const OMEGA_MIN = 150;
-const OMEGA_MAX = 350;
-const FRAME_STEP = 10;
+const RAD_S_TO_RPM = 30 / Math.PI;
+const RPM_TO_RAD_S = Math.PI / 30;
+const OMEGA_MIN_RAD_S = 150;
+const OMEGA_MAX_RAD_S = 350;
+const FRAME_STEP_RAD_S = 10;
+const RPM_MIN = Math.round(OMEGA_MIN_RAD_S * RAD_S_TO_RPM);  // ~1432
+const RPM_MAX = Math.round(OMEGA_MAX_RAD_S * RAD_S_TO_RPM);  // ~3342
+const RPM_STEP = 10;
 const params = new URLSearchParams(window.location.search);
 const STREAM_HOST = params.get('host')
   || (window.location.hostname && window.location.hostname !== 'localhost'
@@ -49,20 +54,20 @@ document.querySelector('#app').innerHTML = `
       <div class="control-group">
         <label class="control-label" for="omegaSlider">Rotor speed</label>
         <div class="slider-container">
-          <span class="slider-bound">${OMEGA_MIN}</span>
+          <span class="slider-bound">${RPM_MIN}</span>
           <input
             type="range"
             id="omegaSlider"
-            min="${OMEGA_MIN}"
-            max="${OMEGA_MAX}"
-            step="${FRAME_STEP}"
-            value="${OMEGA_MIN}"
+            min="${RPM_MIN}"
+            max="${RPM_MAX}"
+            step="${RPM_STEP}"
+            value="${RPM_MIN}"
             class="custom-slider"
           >
-          <span class="slider-bound">${OMEGA_MAX}</span>
+          <span class="slider-bound">${RPM_MAX}</span>
         </div>
         <div class="current-value">
-          <span id="omegaValueDisplay">${OMEGA_MIN}</span><span class="unit">rad/s</span>
+          <span id="omegaValueDisplay">${RPM_MIN}</span><span class="unit">RPM</span>
         </div>
       </div>
 
@@ -93,8 +98,12 @@ const statusText = document.getElementById('stream-status');
 const statusLight = document.getElementById('status-light');
 const container = document.getElementById('webrtc-stream-container');
 
-function omegaToFrame(omega) {
-  return (omega - OMEGA_MIN) / FRAME_STEP;
+function rpmToRadS(rpm) {
+  return rpm * RPM_TO_RAD_S;
+}
+
+function rpmToFrame(rpm) {
+  return (rpmToRadS(rpm) - OMEGA_MIN_RAD_S) / FRAME_STEP_RAD_S;
 }
 
 function updateSliderBackground(value) {
@@ -118,15 +127,17 @@ function setConnectedState(connected) {
 }
 
 function currentOmegaMessage() {
-  const omega = Number(slider.value);
+  const rpm = Number(slider.value);
+  const omega_rad_s = rpmToRadS(rpm);
   return {
     event_type: 'cfd.setOmega',
     payload: {
-      omega_rad_s: omega,
-      frame: omegaToFrame(omega),
-      omega_min_rad_s: OMEGA_MIN,
-      omega_max_rad_s: OMEGA_MAX,
-      frame_step_rad_s: FRAME_STEP,
+      rpm,
+      omega_rad_s,
+      frame: rpmToFrame(rpm),
+      omega_min_rad_s: OMEGA_MIN_RAD_S,
+      omega_max_rad_s: OMEGA_MAX_RAD_S,
+      frame_step_rad_s: FRAME_STEP_RAD_S,
     },
   };
 }
@@ -137,7 +148,7 @@ async function sendOmegaToKit() {
   }
   try {
     await AppStreamer.sendMessage(currentOmegaMessage());
-    setStatus(`Sent ${slider.value} rad/s`, 'connected');
+    setStatus(`Sent ${slider.value} RPM`, 'connected');
   } catch (error) {
     setStatus(error?.info || error?.message || 'Cannot send speed update', 'error');
   }

@@ -8,12 +8,15 @@ frame omega sweep, and exports visualization assets for PyVista and Omniverse.
 ## Repository Map
 
 - `input/`: OpenFOAM case folders with `case.foam` and solution fields.
-- `train.py`: reads OpenFOAM cases, trains PhysicsNeMo MeshGraphNet, and writes predictions.
-- `evaluate.py`: compares generated predictions with OpenFOAM truth on sampled cells.
-- `viz.py`: renders predicted streamlines to PNG and exports animated USD.
-- `compare.py`: renders OpenFOAM truth streamlines for visual comparison.
-- `export_streamlines.py`: lower-level USD streamline exporter.
-- `omniverse_ui.py`: Omniverse Kit in-app UI for timeline control.
+- `01_export_openfoam.py`: exports each OpenFOAM case to `.vtu` / `.vtp` / `.vdb` ground-truth files.
+- `02_train_mgn.py`: trains PhysicsNeMo MeshGraphNet surrogate → `out_outputs/`.
+- `02_train_fno.py`: trains PhysicsNeMo FNO surrogate (roadmap-preferred) → `out_fno/`.
+- `03_export_model.py`: wraps trained model in a TorchScript surrogate → `cfd_surrogate.ts`.
+- `04_viz.py`: renders predicted streamlines to PNG and exports animated USD.
+- `04_export_streamlines.py`: lower-level USD streamline exporter.
+- `cfd_cases.py`: shared OpenFOAM case discovery helpers (imported by pipeline scripts).
+- `omniverse_ui.py`: Omniverse Kit in-app RPM slider UI.
+- `kit_extension/cfd_inference.py`: real-time inference Kit extension (Phase 3).
 - `web_ui/`: Vite WebRTC dashboard for Omniverse streaming and omega control.
 - `scripts/`: PowerShell helpers for rebuilding split artifact files.
 
@@ -45,7 +48,7 @@ npm run dev
 
 ## Data Layout
 
-`train.py` expects case folders under `input/`:
+The pipeline scripts expect case folders under `input/`:
 
 ```text
 input/
@@ -64,38 +67,31 @@ folder name as a fallback.
 
 Default training output is `out_outputs/`. Visualization output remains `out/`.
 
+**Step 1 — Export ground truth:**
 ```powershell
-cd D:\Work
-python train.py
+python 01_export_openfoam.py                 # → out_gt/
+python 01_export_openfoam.py --no-vdb        # skip VDB
 ```
 
-Useful overrides:
-
+**Step 2 — Train surrogate (choose one):**
 ```powershell
-python train.py --out out_outputs --subsample 300000 --epochs 3000
-python train.py --validation-omega 250 --infer-frames 21
-python train.py --device cuda
-python train.py --no-zip
+python 02_train_mgn.py                       # MeshGraphNet → out_outputs/
+python 02_train_fno.py                       # FNO (roadmap-preferred) → out_fno/
+python 02_train_fno.py --grid-res 128 --pi-weight 1e-3
 ```
 
-Write a default JSON config, edit it, then run from it:
-
+JSON config workflow:
 ```powershell
-python train.py --write-default-config train_config.json
-python train.py --config train_config.json
+python 02_train_mgn.py --write-default-config train_config.json
+python 02_train_mgn.py --config train_config.json
+python 02_train_mgn.py --resume out_outputs/checkpoint_best.pt --epochs 500
 ```
 
-CLI arguments override values from `--config`.
-
-Resume from an existing model checkpoint:
-
+**Step 3 — Export TorchScript:**
 ```powershell
-python train.py --resume out_outputs/checkpoint_best.pt --epochs 500
+python 03_export_model.py                    # MGN from out_outputs/
+python 03_export_model.py --arch fno --out-dir out_fno
 ```
-
-`--resume` loads model weights from the checkpoint before training. Existing
-checkpoints saved by this repo are raw PyTorch `state_dict` files and remain
-compatible.
 
 ## Evaluation
 
@@ -126,7 +122,7 @@ for `U`, and negative prediction fractions for non-negative fields such as `k`,
 Render predicted streamlines:
 
 ```powershell
-python viz.py
+python 04_viz.py
 ```
 
 Render OpenFOAM truth streamlines for comparison:
@@ -138,7 +134,7 @@ python compare.py
 Export animated streamline USD directly:
 
 ```powershell
-python export_streamlines.py
+python 04_export_streamlines.py
 ```
 
 If `usd-core` is missing, install optional dependencies:
@@ -177,14 +173,15 @@ Override it with query parameters:
 http://localhost:5173/?host=192.168.1.20&port=49100
 ```
 
-When connected, the rotor speed slider sends this custom message through
+When connected, the rotor speed slider (in **RPM**) sends this custom message through
 `AppStreamer.sendMessage`:
 
 ```json
 {
   "event_type": "cfd.setOmega",
   "payload": {
-    "omega_rad_s": 250,
+    "rpm": 2387,
+    "omega_rad_s": 249.9,
     "frame": 10,
     "omega_min_rad_s": 150,
     "omega_max_rad_s": 350,
@@ -193,11 +190,11 @@ When connected, the rotor speed slider sends this custom message through
 }
 ```
 
-The streamed Kit app or Action Graph should handle `cfd.setOmega` and map
-`payload.frame` to the USD timeline frame. The local `omniverse_ui.py` follows
-the same mapping:
+`cfd_inference.py` accepts either `omega_rad_s` or `rpm` (converts automatically).
+The local `omniverse_ui.py` RPM slider follows the same frame mapping:
 
 ```text
+omega_rad_s = rpm * π / 30
 frame = (omega_rad_s - 150) / 10
 ```
 
@@ -206,7 +203,7 @@ frame = (omega_rad_s - 150) / 10
 Quick checks:
 
 ```powershell
-python -m py_compile train.py evaluate.py viz.py export_streamlines.py compare.py omniverse_ui.py
+python -m py_compile cfd_cases.py 01_export_openfoam.py 02_train_mgn.py 02_train_fno.py 03_export_model.py 04_viz.py 04_export_streamlines.py
 cd web_ui
 npm run build
 ```

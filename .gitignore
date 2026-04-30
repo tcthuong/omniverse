@@ -40,8 +40,20 @@ pnpm-debug.log*
 # Generated data and outputs
 input/
 out/
+out_gt/
+out_fno/
 out_outputs/
 out_truth/
+
+# foamToVTK output (written inside each case folder)
+*/VTK/
+
+# Binary artifacts / large generated files
+*.pt
+*.ts
+*.npz
+*.npy
+*.zip
 
 # OS and editor files
 .DS_Store

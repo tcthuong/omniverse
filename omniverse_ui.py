@@ -1,5 +1,12 @@
+import math
+
 import omni.timeline
 import omni.ui as ui
+
+_OMEGA_MIN_RAD_S = 150.0
+_FRAME_STEP_RAD_S = 10.0
+_RPM_MIN = round(_OMEGA_MIN_RAD_S * 30.0 / math.pi)  # 1432
+_RPM_MAX = round(350.0 * 30.0 / math.pi)              # 3342
 
 
 class CFDControls:
@@ -56,14 +63,14 @@ class CFDControls:
 
                 with ui.HStack(height=20):
                     ui.Label("Speed Control", width=120)
-                    ui.Label("(rad/s)", name="Dim", width=50)
+                    ui.Label("(RPM)", name="Dim", width=50)
                     ui.Spacer()
 
                 with ui.HStack(height=25, spacing=10):
-                    ui.Label("150", name="Dim", width=30)
-                    self.slider = ui.FloatSlider(min=150, max=350)
+                    ui.Label(f"{_RPM_MIN}", name="Dim", width=40)
+                    self.slider = ui.FloatSlider(min=_RPM_MIN, max=_RPM_MAX)
                     self.slider.model.add_value_changed_fn(self.on_slider_changed)
-                    ui.Label("350", name="Dim", width=30, alignment=ui.Alignment.RIGHT)
+                    ui.Label(f"{_RPM_MAX}", name="Dim", width=40, alignment=ui.Alignment.RIGHT)
 
                 ui.Spacer(height=10)
 
@@ -86,9 +93,9 @@ class CFDControls:
                     ui.Label("100", name="Dim")
 
     def on_slider_changed(self, model):
-        val = model.as_float
-        # Match generated files: 150 rad/s -> frame 0, 350 rad/s -> frame 20.
-        frame = (val - 150.0) / 10.0
+        rpm = model.as_float
+        omega_rad_s = rpm * math.pi / 30.0
+        frame = (omega_rad_s - _OMEGA_MIN_RAD_S) / _FRAME_STEP_RAD_S
         omni.timeline.get_timeline_interface().set_current_time(frame)
 
 
