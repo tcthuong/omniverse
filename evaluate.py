@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pyvista as pv
 
-from cfd_cases import case_map_by_omega, resolve_input_dir
+from cfd_cases import case_map_by_omega, discover_exported_cases, resolve_input_dir
 
 
 FIELD_MAP = {
@@ -20,6 +20,14 @@ NON_NEGATIVE_FIELDS = {"k", "nut", "omega_turb"}
 
 
 def load_truth(case_dir: Path) -> dict[str, np.ndarray]:
+    vtu_path = case_dir / "internal_mesh.vtu"
+    if vtu_path.exists():
+        mesh = pv.read(str(vtu_path))
+        result = {}
+        for pred_name, foam_name in FIELD_MAP.items():
+            if foam_name in mesh.cell_data:
+                result[pred_name] = np.asarray(mesh.cell_data[foam_name], dtype=np.float32)
+        return result
     reader = pv.POpenFOAMReader(str(case_dir / "case.foam"))
     reader.set_active_time_value(reader.time_values[-1])
     reader.enable_all_cell_arrays()
@@ -131,7 +139,11 @@ def main() -> None:
     args = parse_args()
     input_dir = resolve_input_dir(args.input, base_dir=Path(__file__).parent)
 
-    cases = case_map_by_omega(input_dir)
+    # Support both raw OpenFOAM cases and pre-exported VTU directories
+    if (input_dir / "case.foam").exists() or any((input_dir / d / "case.foam").exists() for d in input_dir.iterdir() if d.is_dir()):
+        cases = case_map_by_omega(input_dir)
+    else:
+        cases = {c.omega: c.path for c in discover_exported_cases(input_dir, base_dir=Path(__file__).parent)}
     predictions = np.load(args.predictions)
     pred_omegas = prediction_omegas(predictions)
     common_omegas = [omega for omega in pred_omegas if omega in cases]

@@ -8,15 +8,10 @@ Outputs:
     out/frame_XX_omegaXXX.png   # PyVista streamlines per frame
     out/streamlines_anim.usda   # animated USD streamlines for Omniverse
 """
-import sys
-import zipfile
 from pathlib import Path
 
 import numpy as np
 import pyvista as pv
-from scipy.spatial import cKDTree
-
-from cfd_cases import discover_cases
 
 HERE = Path(__file__).parent
 OUT = HERE / "out"
@@ -66,22 +61,12 @@ def bounds_from_minmax(bmin, bmax):
     )
 
 
-def find(name: str) -> Path:
-    # auto-unzip colab_outputs.zip if present
-    for zp in HERE.glob("*.zip"):
-        tgt = HERE / zp.stem
-        if not tgt.exists():
-            print(f"Unzipping {zp.name} -> {tgt}")
-            with zipfile.ZipFile(zp) as zf:
-                zf.extractall(tgt)
-    for p in HERE.rglob(name):
-        return p
-    raise FileNotFoundError(name)
+PRED_DIR = HERE / "out_outputs"
 
 
 def load():
-    cc = np.load(find("cell_centers.npy"))
-    preds = np.load(find("predictions.npz"))
+    cc = np.load(PRED_DIR / "cell_centers.npy")
+    preds = np.load(PRED_DIR / "predictions.npz")
     omegas = sorted({float(k.split("/")[0]) for k in preds.files})
     frames = []
     for om in omegas:
@@ -92,59 +77,6 @@ def load():
         })
     print(f"{len(cc):,} points, {len(frames)} frames  omega={omegas[0]}..{omegas[-1]}")
     return cc, omegas, frames
-
-
-def load_template_mesh(input_dir: Path | str = "input") -> pv.DataSet:
-    case_foam = discover_cases(input_dir, base_dir=HERE)[0].path / "case.foam"
-    reader = pv.POpenFOAMReader(str(case_foam))
-    reader.set_active_time_value(reader.time_values[-1])
-    reader.enable_all_cell_arrays()
-    reader.cell_to_point_creation = False
-    return reader.read()["internalMesh"]
-
-
-def nearest_full_cell_indices(mesh: pv.DataSet, sampled_centers: np.ndarray) -> np.ndarray:
-    cache = OUT / "nearest_full_cell_idx.npy"
-    if cache.exists():
-        return np.load(cache)
-
-    full_centers = np.asarray(mesh.cell_centers().points, dtype=np.float32)
-    tree = cKDTree(sampled_centers)
-    _, nn = tree.query(full_centers, workers=-1)
-    nn = nn.astype(np.int64)
-    np.save(cache, nn)
-    return nn
-
-
-def render_png_on_openfoam_mesh(
-    mesh: pv.DataSet,
-    nn: np.ndarray,
-    frame: dict,
-    omega: float,
-    out: Path,
-) -> None:
-    work = mesh.copy(deep=True)
-    work.cell_data["U"] = frame["U"][nn]
-    point_mesh = work.cell_data_to_point_data(pass_cell_data=False)
-
-    seed = make_center_seed(point_mesh.bounds, resolution=30)
-    stream = point_mesh.streamlines_from_source(
-        seed,
-        vectors="U",
-        integration_direction="forward",
-        max_steps=2500,
-    )
-
-    p = pv.Plotter(off_screen=True)
-    if stream.n_points > 0:
-        stream["Umag"] = np.linalg.norm(stream["U"], axis=1)
-        vmax = float(np.linalg.norm(frame["U"], axis=1).max())
-        p.add_mesh(stream.tube(radius=0.003), scalars="Umag", cmap="turbo", clim=(0.0, vmax))
-    p.add_mesh(point_mesh.outline(), color="gray")
-    p.camera_position = "iso"
-    p.add_text(f"omega = {omega:.1f} rad/s (predicted on OpenFOAM mesh)", font_size=10)
-    p.screenshot(str(out), window_size=(1280, 800))
-    p.close()
 
 
 def render_png(cc: np.ndarray, frame: dict, omega: float, out: Path) -> None:
@@ -174,7 +106,9 @@ def render_png(cc: np.ndarray, frame: dict, omega: float, out: Path) -> None:
 
 def export_usd(cc: np.ndarray, omegas: list, frames: list, out: Path) -> None:
     try:
-        from export_streamlines import export_streamlines_usd
+        import importlib
+        mod = importlib.import_module("04_export_streamlines")
+        export_streamlines_usd = mod.export_streamlines_usd
     except ImportError:
         print("USD export dependencies missing - skipping. `pip install usd-core` to enable.")
         return

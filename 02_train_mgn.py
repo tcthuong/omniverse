@@ -12,10 +12,10 @@ import physicsnemo
 from physicsnemo.models.meshgraphnet import MeshGraphNet
 from torch_geometric.data import Data
 
-from cfd_cases import discover_cases, resolve_input_dir
+from cfd_cases import discover_exported_cases
 
 DEFAULT_CONFIG = {
-    "input": "input",
+    "gt_dir": "out_gt",
     "out": "out_outputs",
     "subsample": 300_000,
     "k_neighbors": 8,
@@ -47,7 +47,8 @@ def parse_args() -> dict:
         type=Path,
         help="Write the default JSON config to this path and exit.",
     )
-    parser.add_argument("--input", dest="input", type=str, help="OpenFOAM input directory.")
+    parser.add_argument("--gt-dir", dest="gt_dir", type=str,
+                        help="Pre-exported VTU directory from 01_export_openfoam.py (default: out_gt).")
     parser.add_argument("--out", dest="out", type=str, help="Training output directory.")
     parser.add_argument("--subsample", type=int, help="Maximum number of cells to sample.")
     parser.add_argument("--k-neighbors", type=int, help="KNN graph neighbors per node.")
@@ -126,13 +127,19 @@ def load_model_checkpoint(model: nn.Module, path: str | None, device: str) -> No
     print(f"Resumed model weights from {ckpt_path.resolve()}")
 
 def extract(path: Path):
-    r = pv.POpenFOAMReader(str(path / 'case.foam'))
-    r.set_active_time_value(r.time_values[-1])
-    r.enable_all_cell_arrays(); r.cell_to_point_creation = False
-    m = r.read()['internalMesh']
+    """Load cell centers and CFD fields from pre-exported VTU."""
+    vtu_path = path / "internal_mesh.vtu"
+    if not vtu_path.exists():
+        raise FileNotFoundError(
+            f"VTU not found: {vtu_path}\n"
+            "Run 01_export_openfoam.py first to generate exported data."
+        )
+    m = pv.read(str(vtu_path))
     cc = np.asarray(m.cell_centers().points, dtype=np.float32)
-    f = {k: np.asarray(m.cell_data[k], dtype=np.float32) for k in ['U','p','k','nut','omega']}
-    f['omega_turb'] = f.pop('omega')
+    f = {k: np.asarray(m.cell_data[k], dtype=np.float32)
+         for k in ['U', 'p', 'k', 'nut', 'omega'] if k in m.cell_data}
+    if 'omega' in f:
+        f['omega_turb'] = f.pop('omega')
     return cc, f
 
 def main():
@@ -144,28 +151,49 @@ def main():
     print(json.dumps(cfg, indent=2))
 
     # Local paths
-    INPUT = resolve_input_dir(cfg["input"], base_dir=Path(__file__).parent)
-    print('INPUT =', INPUT.resolve())
-    
+    GT_DIR = Path(cfg["gt_dir"]) if cfg["gt_dir"] else None
+    if GT_DIR is not None and not GT_DIR.is_absolute():
+        GT_DIR = Path(__file__).parent / GT_DIR
+
+    # Discover cases from exported VTU directory
+    if not GT_DIR:
+        raise ValueError("--gt-dir is required. Run 01_export_openfoam.py first.")
+    case_records = discover_exported_cases(GT_DIR, base_dir=Path(__file__).parent)
+    print(f'Found {len(case_records)} case(s) from {GT_DIR.resolve()}')
+
     if int(cfg["infer_frames"]) < 2:
         raise ValueError("infer_frames must be at least 2")
     OUT = Path(cfg["out"])
     OUT.mkdir(exist_ok=True)
 
-    # 1 - Discover + extract every case in input/
-    case_records = discover_cases(INPUT)
-    print(f'Found {len(case_records)} case(s):')
-
-    cc = None; cases = {}
+    # 1 - Load every case
+    cc_all = {}; cases = {}
     for case in case_records:
         cd = case.path
         om = case.omega
         t0 = time.time()
         ccx, fields = extract(cd)
-        if cc is None: cc = ccx
+        cc_all[om] = ccx
         cases[om] = fields
         umax = float(np.linalg.norm(fields['U'], axis=1).max())
         print(f'  {cd.name}  omega={om}  |U|max={umax:.2f}  cells={ccx.shape[0]:,}  t={time.time()-t0:.1f}s')
+
+    # Mesh consistency check: MGN requires all cases on the same mesh topology
+    cell_counts = {om: cases[om]['U'].shape[0] for om in cases}
+    unique_counts = set(cell_counts.values())
+    if len(unique_counts) > 1:
+        print(f"\nWARNING: meshes have different cell counts:")
+        for om in sorted(cell_counts):
+            print(f"  omega={om}: {cell_counts[om]:,} cells")
+        majority = max(unique_counts, key=lambda c: sum(1 for v in cell_counts.values() if v == c))
+        dropped = [om for om, c in cell_counts.items() if c != majority]
+        print(f"Keeping {sum(1 for v in cell_counts.values() if v == majority)} case(s) with {majority:,} cells")
+        print(f"Dropping: {dropped}")
+        for om in dropped:
+            del cases[om]
+            del cc_all[om]
+
+    cc = cc_all[sorted(cases.keys())[0]]
 
     OMEGAS = sorted(cases.keys())
     print(f'Omegas: {OMEGAS}')

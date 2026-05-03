@@ -1,6 +1,7 @@
 """Shared OpenFOAM case discovery helpers."""
 from __future__ import annotations
 
+import json
 import math
 import re
 from dataclasses import dataclass
@@ -77,3 +78,34 @@ def discover_cases(input_dir: str | Path = "input", base_dir: Path | None = None
 
 def case_map_by_omega(input_dir: str | Path = "input", base_dir: Path | None = None) -> dict[float, Path]:
     return {case.omega: case.path for case in discover_cases(input_dir, base_dir=base_dir)}
+
+
+def discover_exported_cases(export_dir: str | Path, base_dir: Path | None = None) -> list[CfdCase]:
+    """Discover cases from a pre-exported directory (e.g. out_gt/).
+
+    Each subdirectory must contain a ``meta.json`` with at least ``{"omega": ...}``.
+    """
+    root = Path(export_dir)
+    if not root.is_absolute() and base_dir is not None:
+        root = Path(base_dir) / root
+    root = root.resolve()
+
+    if not root.is_dir():
+        raise FileNotFoundError(f"export directory not found: {root}")
+
+    cases = []
+    seen = set()
+    for sub in sorted(root.iterdir()):
+        meta_path = sub / "meta.json"
+        if not sub.is_dir() or not meta_path.exists():
+            continue
+        meta = json.loads(meta_path.read_text())
+        omega = float(meta["omega"])
+        if omega in seen:
+            raise ValueError(f"duplicate omega {omega} in {root}")
+        seen.add(omega)
+        cases.append(CfdCase(omega=omega, path=sub))
+
+    if not cases:
+        raise FileNotFoundError(f"no exported cases found in {root}")
+    return sorted(cases, key=lambda case: case.omega)
